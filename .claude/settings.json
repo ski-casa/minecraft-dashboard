@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Remove-Item \"$env:APPDATA\\\\.minecraft\\\\mods\\\\icuehud-0.1.0.jar\", \"$env:APPDATA\\\\.minecraft\\\\mods\\\\bluemap-5.22-fabric.jar\" -Confirm:$false; Get-ChildItem \"$env:APPDATA\\\\.minecraft\\\\mods\" | Select-Object -ExpandProperty Name)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m 'Xeneon Edge HUD v2: JourneyMap-based widgets, installer, focus guard *)"
+    ]
+  }
+}

@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="apiBase" data-label="Mod API base URL" data-type="textfield" data-default="http://127.0.0.1:27421" />
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		width: 100%;
+		height: 100%;
+		background: #101014;
+		color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+	}
+	.wrap {
+		box-sizing: border-box;
+		width: 100%;
+		height: 100%;
+		padding: 3%;
+		display: flex;
+		flex-direction: column;
+		gap: 2%;
+	}
+	.row {
+		display: grid;
+		grid-template-columns: repeat(9, 1fr);
+		gap: 1.2%;
+		flex: 1;
+	}
+	.row.armor-row {
+		grid-template-columns: repeat(5, 1fr);
+		flex: 0.9;
+		width: 55%;
+	}
+	.slot {
+		position: relative;
+		border-radius: 6px;
+		border: 1px solid #303038;
+		background: #1a1a20;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+	}
+	.slot.filled {
+		border-color: #48485a;
+	}
+	.slot .name {
+		font-size: 0.62em;
+		font-weight: 600;
+		text-align: center;
+		padding: 4%;
+		line-height: 1.1;
+		word-break: break-word;
+	}
+	.slot .count {
+		position: absolute;
+		bottom: 2px;
+		right: 4px;
+		font-size: 0.7em;
+		font-weight: 700;
+		text-shadow: 0 0 3px #000, 0 0 3px #000;
+	}
+	.offline {
+		display: none;
+		flex: 1;
+		align-items: center;
+		justify-content: center;
+		opacity: 0.6;
+		font-size: 1.2em;
+	}
+	.wrap.offline-mode .live { display: none; }
+	.wrap.offline-mode .offline { display: flex; }
+</style>
+</head>
+<body>
+	<div class="wrap" id="wrap">
+		<div class="live" id="live" style="display:flex; flex-direction:column; gap:2%; flex:1;">
+			<div class="row armor-row" id="armorRow"></div>
+			<div class="row" id="storageRow1"></div>
+			<div class="row" id="storageRow2"></div>
+			<div class="row" id="storageRow3"></div>
+			<div class="row" id="hotbarRow"></div>
+		</div>
+		<div class="offline" id="offline">Minecraft not running</div>
+	</div>
+<script>
+	function apiBase() {
+		return (window.apiBase && window.apiBase.length) ? window.apiBase : "http://127.0.0.1:27421";
+	}
+
+	// Standard Minecraft PlayerInventory slot layout.
+	var HOTBAR = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+	var STORAGE_ROW1 = [9, 10, 11, 12, 13, 14, 15, 16, 17];
+	var STORAGE_ROW2 = [18, 19, 20, 21, 22, 23, 24, 25, 26];
+	var STORAGE_ROW3 = [27, 28, 29, 30, 31, 32, 33, 34, 35];
+	var ARMOR = [39, 38, 37, 36, 40]; // head, chest, legs, feet, offhand
+
+	function buildRow(container, indices) {
+		container.innerHTML = "";
+		indices.forEach(function (index) {
+			var el = document.createElement("div");
+			el.className = "slot";
+			el.dataset.index = index;
+			container.appendChild(el);
+		});
+	}
+
+	function colorFor(id) {
+		var hash = 0;
+		for (var i = 0; i < id.length; i++) {
+			hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+		}
+		var hue = hash % 360;
+		return "hsl(" + hue + ", 45%, 30%)";
+	}
+
+	function shortName(name) {
+		return name.length > 14 ? name.slice(0, 13) + "…" : name;
+	}
+
+	function render(slots) {
+		var byIndex = {};
+		slots.forEach(function (s) { byIndex[s.index] = s; });
+
+		document.querySelectorAll(".slot").forEach(function (el) {
+			var index = Number(el.dataset.index);
+			var s = byIndex[index];
+			if (!s) {
+				el.classList.remove("filled");
+				el.style.background = "";
+				el.innerHTML = "";
+				return;
+			}
+			el.classList.add("filled");
+			el.style.background = colorFor(s.itemId);
+			el.innerHTML = "<span class=\"name\">" + shortName(s.name) + "</span>" +
+				(s.count > 1 ? "<span class=\"count\">" + s.count + "</span>" : "");
+		});
+	}
+
+	function setOffline(isOffline) {
+		document.getElementById("wrap").classList.toggle("offline-mode", isOffline);
+	}
+
+	function poll() {
+		fetch(apiBase() + "/inventory", { cache: "no-store" })
+			.then(function (r) { return r.json(); })
+			.then(function (data) {
+				if (!data.inGame) {
+					setOffline(true);
+					return;
+				}
+				setOffline(false);
+				render(data.slots || []);
+			})
+			.catch(function () { setOffline(true); });
+	}
+
+	buildRow(document.getElementById("armorRow"), ARMOR);
+	buildRow(document.getElementById("storageRow1"), STORAGE_ROW1);
+	buildRow(document.getElementById("storageRow2"), STORAGE_ROW2);
+	buildRow(document.getElementById("storageRow3"), STORAGE_ROW3);
+	buildRow(document.getElementById("hotbarRow"), HOTBAR);
+
+	setOffline(true);
+	poll();
+	setInterval(poll, 500);
+</script>
+</body>
+</html>

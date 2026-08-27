@@ -1,0 +1,124 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="apiBase" data-label="JourneyMap webmap URL" data-type="textfield" data-default="http://localhost:8080" />
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		width: 100%;
+		height: 100%;
+		background: #101014;
+		color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+		-webkit-user-select: none;
+		user-select: none;
+	}
+	.wrap {
+		box-sizing: border-box;
+		width: 100%;
+		height: 100%;
+		padding: 6% 8%;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		gap: 4%;
+		cursor: pointer;
+	}
+	.wrap.flash {
+		animation: flash 0.35s ease-out;
+	}
+	@keyframes flash {
+		0% { background: #2a3a2e; }
+		100% { background: #101014; }
+	}
+	.axis-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+	}
+	.axis-label {
+		font-size: 1.4em;
+		font-weight: 600;
+		opacity: 0.6;
+		letter-spacing: 0.05em;
+	}
+	.axis-value {
+		font-family: "Consolas", "Cascadia Mono", monospace;
+		font-size: 2.4em;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+	}
+	.footer {
+		display: flex;
+		justify-content: space-between;
+		font-size: 1.1em;
+		opacity: 0.7;
+	}
+	.footer .error { color: #e08080; }
+	.empty {
+		display: none;
+		text-align: center;
+		font-size: 1.4em;
+		opacity: 0.6;
+	}
+	.wrap.empty-mode .live { display: none; }
+	.wrap.empty-mode .empty { display: block; }
+</style>
+</head>
+<body>
+	<div class="wrap empty-mode" id="wrap">
+		<div class="live" id="live">
+			<div class="axis-row"><span class="axis-label">X</span><span class="axis-value" id="x">--</span></div>
+			<div class="axis-row"><span class="axis-label">Y</span><span class="axis-value" id="y">--</span></div>
+			<div class="axis-row"><span class="axis-label">Z</span><span class="axis-value" id="z">--</span></div>
+			<div class="footer"><span id="dim">--</span><span id="status">--</span></div>
+		</div>
+		<div class="empty" id="empty">Tap to capture<br />coordinates</div>
+	</div>
+<script src="jm-api.js"></script>
+<script>
+	var wrap = document.getElementById("wrap");
+
+	function timeStamp() {
+		var now = new Date();
+		return ("0" + now.getHours()).slice(-2) + ":" + ("0" + now.getMinutes()).slice(-2);
+	}
+
+	function capture() {
+		wrap.classList.remove("flash");
+		void wrap.offsetWidth; // restart the flash animation on every tap
+		wrap.classList.add("flash");
+
+		JM.fetchPlayer()
+			.then(function (p) {
+				wrap.classList.remove("empty-mode");
+				document.getElementById("x").textContent = p.x.toFixed(1);
+				document.getElementById("y").textContent = p.y.toFixed(1);
+				document.getElementById("z").textContent = p.z.toFixed(1);
+				document.getElementById("dim").textContent = p.dimensionLabel;
+				var status = document.getElementById("status");
+				status.textContent = "⚑ " + timeStamp();
+				status.classList.remove("error");
+			})
+			.catch(function () {
+				// Keep the last captured coords on screen; just flag the failed tap.
+				if (wrap.classList.contains("empty-mode")) {
+					document.getElementById("empty").innerHTML = "Minecraft not running";
+					setTimeout(function () {
+						document.getElementById("empty").innerHTML = "Tap to capture<br />coordinates";
+					}, 2000);
+				} else {
+					var status = document.getElementById("status");
+					status.textContent = "no data";
+					status.classList.add("error");
+				}
+			});
+	}
+
+	wrap.addEventListener("click", capture);
+</script>
+</body>
+</html>

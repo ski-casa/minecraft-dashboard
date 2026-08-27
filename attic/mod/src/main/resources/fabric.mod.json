@@ -1,0 +1,23 @@
+{
+	"schemaVersion": 1,
+	"id": "icuehud",
+	"version": "${version}",
+	"name": "iCUE HUD Bridge",
+	"description": "Exposes player coordinates and inventory over a local HTTP API for a Corsair iCUE Xeneon Edge dashboard.",
+	"authors": [
+		"steve"
+	],
+	"license": "MIT",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"com.icuehud.client.IcueHudClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~26.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

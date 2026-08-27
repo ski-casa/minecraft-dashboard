@@ -1,0 +1,9 @@
+# Retired Gradle build output (kept in attic/ for reference only)
+attic/mod/build/
+attic/mod/.gradle/
+
+# Bundled JDK (large, re-downloadable)
+tools/jdk-*/
+
+# Packaged widgets
+dist/

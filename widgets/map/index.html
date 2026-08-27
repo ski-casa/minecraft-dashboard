@@ -1,0 +1,227 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="apiBase" data-label="JourneyMap webmap URL" data-type="textfield" data-default="http://localhost:8080" />
+<meta name="x-icue-property" data-name="zoomLevel" data-label="Zoom level (-2 far ... 5 close)" data-type="textfield" data-default="2" />
+<meta name="x-icue-property" data-name="mapMode" data-label="Map mode (auto, day, night, topo)" data-type="textfield" data-default="auto" />
+<link rel="stylesheet" href="leaflet.css" />
+<style>
+	html, body {
+		margin: 0;
+		padding: 0;
+		width: 100%;
+		height: 100%;
+		background: #101014;
+		color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+	}
+	#map {
+		width: 100%;
+		height: 100%;
+		background: #101014;
+	}
+	.player-arrow svg {
+		display: block;
+		filter: drop-shadow(0 0 3px #000);
+	}
+	.hud-badge {
+		position: absolute;
+		z-index: 1000;
+		background: rgba(16, 16, 20, 0.75);
+		border-radius: 6px;
+		padding: 4px 10px;
+		font-size: 13px;
+		pointer-events: none;
+	}
+	#dimBadge { right: 8px; top: 8px; }
+	.offline {
+		display: none;
+		position: absolute;
+		inset: 0;
+		z-index: 1001;
+		align-items: center;
+		justify-content: center;
+		font-size: 1.3em;
+		opacity: 0.85;
+		background: #101014;
+	}
+	body.offline-mode .offline { display: flex; }
+</style>
+</head>
+<body>
+	<div id="map"></div>
+	<div class="hud-badge" id="dimBadge">--</div>
+	<div class="offline" id="offline">Minecraft not running</div>
+<script src="leaflet.js"></script>
+<script src="jm-api.js"></script>
+<script>
+	// Renders JourneyMap's region tiles the same way TeamJM/webmap-client does:
+	// CRS.Simple with 512px tiles pinned to native zoom 0, so 1 map unit = 1 block
+	// and tile (x, y) covers blocks [512x, 512x+512) / [512y, 512y+512).
+	// Block (x, z) <-> latlng(-z, x).
+
+	var state = {
+		dimension: "minecraft:overworld",
+		mapType: "day",
+		slice: 0,
+		loadStamp: Date.now(),
+		tileVersions: {},     // "x,z" -> stamp, bumped when JourneyMap re-renders a region
+		lastImageCheck: Date.now(),
+		online: false
+	};
+
+	function configuredMode() {
+		var mode = (window.mapMode || "auto").trim().toLowerCase();
+		return ["day", "night", "topo"].indexOf(mode) >= 0 ? mode : "auto";
+	}
+
+	function configuredZoom() {
+		var z = parseInt(window.zoomLevel, 10);
+		return isNaN(z) ? 2 : Math.max(-2, Math.min(5, z));
+	}
+
+	var JMTileLayer = L.TileLayer.extend({
+		getTileUrl: function (coords) {
+			var version = state.tileVersions[coords.x + "," + coords.y] || state.loadStamp;
+			return JM.apiBase() + "/tiles/tile.png"
+				+ "?x=" + coords.x
+				+ "&z=" + coords.y
+				+ "&dimension=" + encodeURIComponent(state.dimension)
+				+ "&mapTypeString=" + state.mapType
+				+ "&y=" + state.slice
+				+ "&zoom=0"
+				+ "&t=" + version;
+		}
+	});
+
+	var map = L.map("map", {
+		crs: L.CRS.Simple,
+		zoomControl: false,
+		attributionControl: false,
+		dragging: false,
+		touchZoom: false,
+		scrollWheelZoom: false,
+		doubleClickZoom: false,
+		boxZoom: false,
+		keyboard: false,
+		fadeAnimation: false,
+		minZoom: -2,
+		maxZoom: 5
+	}).setView([0, 0], configuredZoom());
+
+	var tiles = new JMTileLayer("", {
+		tileSize: 512,
+		minNativeZoom: 0,
+		maxNativeZoom: 0,
+		minZoom: -2,
+		maxZoom: 5,
+		updateWhenIdle: false,
+		keepBuffer: 2
+	}).addTo(map);
+
+	// Arrow points up at rotation 0; heading 0 = south = down-screen, hence +180.
+	var arrowIcon = L.divIcon({
+		className: "player-arrow",
+		iconSize: [26, 26],
+		iconAnchor: [13, 13],
+		html: '<svg id="arrowSvg" width="26" height="26" viewBox="0 0 26 26">'
+			+ '<polygon points="13,2 22,24 13,18 4,24" fill="#3ea6ff" stroke="#0b2a40" stroke-width="1.5"/>'
+			+ '</svg>'
+	});
+	var marker = L.marker([0, 0], { icon: arrowIcon, interactive: false }).addTo(map);
+
+	function setOffline(isOffline) {
+		state.online = !isOffline;
+		document.body.classList.toggle("offline-mode", isOffline);
+	}
+
+	function desiredView(player) {
+		// The Nether has no sky, so JourneyMap only has cave-layer tiles for it.
+		if (player.dimension === "minecraft:the_nether" || player.dimension === -1) {
+			return { mapType: "underground", slice: Math.floor(player.y) >> 4 };
+		}
+		var mode = configuredMode();
+		return { mapType: mode === "auto" ? "day" : mode, slice: 0 };
+	}
+
+	function applyView(player) {
+		var want = desiredView(player);
+		var dim = (typeof player.dimension === "number")
+			? player.dimension
+			: (player.dimension || "minecraft:overworld");
+		var changed = dim !== state.dimension || want.mapType !== state.mapType || want.slice !== state.slice;
+		state.dimension = dim;
+		state.mapType = want.mapType;
+		state.slice = want.slice;
+		if (changed) {
+			state.tileVersions = {};
+			state.loadStamp = Date.now();
+			tiles.redraw();
+		}
+		document.getElementById("dimBadge").textContent =
+			player.dimensionLabel + (state.mapType === "underground" ? " · y" + Math.floor(player.y) : "");
+	}
+
+	function pollPlayer() {
+		JM.fetchPlayer()
+			.then(function (p) {
+				setOffline(false);
+				applyView(p);
+				var pos = [-p.z, p.x];
+				marker.setLatLng(pos);
+				var svg = document.getElementById("arrowSvg");
+				if (svg) svg.style.transform = "rotate(" + ((p.heading + 180) % 360) + "deg)";
+				map.panTo(pos, { animate: true, duration: 0.4 });
+			})
+			.catch(function () { setOffline(true); });
+	}
+
+	// JourneyMap re-renders regions as you explore; /data/all reports which ones
+	// changed since the given timestamp so only those tiles get re-fetched.
+	function pollChangedTiles() {
+		if (!state.online) return;
+		var since = state.lastImageCheck;
+		state.lastImageCheck = Date.now();
+		fetch(JM.apiBase() + "/data/all?images.since=" + since, { cache: "no-store" })
+			.then(function (r) {
+				if (!r.ok) throw new Error("HTTP " + r.status);
+				return r.json();
+			})
+			.then(function (data) {
+				var regions = (data.images && data.images.regions) || [];
+				if (!regions.length) return;
+				var stamp = Date.now();
+				regions.forEach(function (region) {
+					state.tileVersions[region[0] + "," + region[1]] = stamp;
+				});
+				refreshLoadedTiles(regions);
+			})
+			.catch(function () { /* next poll retries */ });
+	}
+
+	function refreshLoadedTiles(regions) {
+		var changed = {};
+		regions.forEach(function (region) { changed[region[0] + "," + region[1]] = true; });
+		// Reload just the affected <img> tiles in place (Leaflet internal, but stable).
+		try {
+			var loaded = tiles._tiles;
+			for (var key in loaded) {
+				var tile = loaded[key];
+				if (tile && tile.coords && changed[tile.coords.x + "," + tile.coords.y]) {
+					tile.el.src = tiles.getTileUrl(tile.coords);
+				}
+			}
+		} catch (e) {
+			tiles.redraw();
+		}
+	}
+
+	setOffline(true);
+	pollPlayer();
+	setInterval(pollPlayer, 500);
+	setInterval(pollChangedTiles, 2500);
+</script>
+</body>
+</html>

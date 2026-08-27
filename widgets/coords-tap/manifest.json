@@ -1,0 +1,17 @@
+{
+	"author": "steve",
+	"id": "com.icuehud.widgets.coords-tap",
+	"name": "MC Coordinates (tap)",
+	"description": "Captures the current Minecraft coordinates only when tapped - pin a spot to remember while you keep moving.",
+	"version": "0.1.0",
+	"preview_icon": "icon.png",
+	"min_framework_version": "1.4.0",
+	"min_app_version": "5.47.0",
+	"os": [
+		{ "platform": "windows" }
+	],
+	"supported_devices": [
+		{ "type": "dashboard_lcd" }
+	],
+	"interactive": true
+}
