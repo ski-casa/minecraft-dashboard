@@ -189,8 +189,8 @@ if ($webmapConfigs) {
     foreach ($cfg in $webmapConfigs) {
         $raw = Get-Content $cfg.FullName -Raw
         $patched = $raw `
-            -replace '("enabled"\s*:\s*)(false|true)', '${1}true' `
-            -replace '("port"\s*:\s*)\d+', ('${1}' + $WebmapPort)
+            -replace '("enabled"\s*:\s*"?)(false|true)', '${1}true' `
+            -replace '("port"\s*:\s*"?)\d+', ('${1}' + $WebmapPort)
         if ($patched -ne $raw) {
             Set-Content -Path $cfg.FullName -Value $patched -Encoding UTF8
             Write-Host "Patched $($cfg.FullName): webmap enabled on port $WebmapPort"

@@ -20,6 +20,9 @@ $distDir = Join-Path $root 'dist'
 New-Item -ItemType Directory -Force -Path $distDir | Out-Null
 $cli = Get-Command icuewidget -ErrorAction SilentlyContinue
 
+# Widgets share jm-api.js by copy; refresh the copies from the canonical widgets/jm-api.js first.
+& (Join-Path $PSScriptRoot "sync-jm-api.ps1")
+
 Get-ChildItem -Path $widgetsDir -Directory | ForEach-Object {
     $widget = $_
     if (-not (Test-Path (Join-Path $widget.FullName 'manifest.json'))) {

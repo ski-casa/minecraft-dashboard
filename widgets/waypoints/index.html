@@ -1,0 +1,271 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="apiBase" data-label="JourneyMap webmap URL" data-type="textfield" data-default="http://localhost:8080" />
+<meta name="x-icue-property" data-name="dimensions" data-label="Show waypoints from (current, all)" data-type="textfield" data-default="current" />
+<meta name="x-icue-property" data-name="maxRows" data-label="Maximum rows" data-type="textfield" data-default="12" />
+<meta name="x-icue-property" data-name="deathFirst" data-label="Pin death points to the top (1 or 0)" data-type="textfield" data-default="1" />
+<style>
+	/* Sized from the panel's smaller side so the widget scales to any grid cell. */
+	html { font-size: 4.4vmin; }
+	html, body {
+		margin: 0;
+		padding: 0;
+		width: 100%;
+		height: 100%;
+		background: #101014;
+		color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+		-webkit-user-select: none;
+		user-select: none;
+	}
+	.wrap {
+		box-sizing: border-box;
+		width: 100%;
+		height: 100%;
+		padding: 0.5em 0.8em 0.4em;
+		display: flex;
+		flex-direction: column;
+	}
+	.header {
+		flex: none;
+		display: flex;
+		justify-content: space-between;
+		font-size: 0.8em;
+		opacity: 0.55;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		padding-bottom: 0.35em;
+	}
+	.list {
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15em;
+	}
+	.row {
+		flex: none;
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+		align-items: center;
+		gap: 0.5em;
+		padding: 0.22em 0.45em;
+		border-radius: 0.4em;
+		border-left: 0.25em solid transparent;
+		cursor: pointer;
+	}
+	.row.locked { background: #1b2a3a; border-left-color: #3ea6ff; }
+	.row.death { background: #3a1b1b; }
+	.row.death .name { color: #ff8a8a; }
+	.dot {
+		width: 0.7em;
+		height: 0.7em;
+		border-radius: 50%;
+		box-shadow: 0 0 0.2em rgba(0, 0, 0, 0.6);
+	}
+	.name {
+		font-size: 1.05em;
+		font-weight: 600;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.name small {
+		font-size: 0.7em;
+		font-weight: 400;
+		opacity: 0.6;
+		margin-left: 0.4em;
+	}
+	.dist {
+		font-family: "Consolas", "Cascadia Mono", monospace;
+		font-size: 1.25em;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+	}
+	.dy {
+		font-size: 0.9em;
+		opacity: 0.65;
+		min-width: 2.4em;
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+	}
+	.arrow svg {
+		display: block;
+		width: 1.5em;
+		height: 1.5em;
+		transition: transform 0.25s;
+	}
+	.arrow polygon { fill: #3ea6ff; stroke: #0b2a40; stroke-width: 1.5; }
+	.row.death .arrow polygon { fill: #ff6b6b; stroke: #401010; }
+	.arrow.on-course polygon { fill: #7fd68a; stroke: #0f2f15; }
+	.message {
+		display: none;
+		flex: 1 1 auto;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		font-size: 1.2em;
+		opacity: 0.6;
+		padding: 0 1em;
+	}
+	.wrap.empty-mode .message { display: flex; }
+	.wrap.empty-mode .list { display: none; }
+	.offline {
+		display: none;
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		align-items: center;
+		justify-content: center;
+		font-size: 1.3em;
+		opacity: 0.85;
+		background: #101014;
+	}
+	body.offline-mode .offline { display: flex; }
+</style>
+</head>
+<body>
+	<div class="wrap" id="wrap">
+		<div class="header"><span id="title">Waypoints</span><span id="count"></span></div>
+		<div class="list" id="list"></div>
+		<div class="message" id="message">No waypoints</div>
+	</div>
+	<div class="offline">Minecraft not running</div>
+<script src="jm-api.js"></script>
+<script>
+	var waypoints = [];   // last normalized list from JourneyMap
+	var player = null;
+	var locked = {};      // id -> true; tapped rows stay at the top
+	var rows = {};        // id -> row element
+
+	function setOffline(isOffline) {
+		document.body.classList.toggle("offline-mode", isOffline);
+	}
+
+	function pollWaypoints() {
+		JM.fetchWaypoints()
+			.then(function (list) { waypoints = list; render(); })
+			.catch(function () { /* keep the last list; the player poll reports offline */ });
+	}
+
+	function pollPlayer() {
+		JM.fetchPlayer()
+			.then(function (p) { player = p; setOffline(false); render(); })
+			.catch(function () { player = null; setOffline(true); });
+	}
+
+	function showAllDimensions() {
+		return String(window.dimensions || "current").trim().toLowerCase() === "all";
+	}
+
+	function formatDistance(d) {
+		if (d >= 10000) return (d / 1000).toFixed(1) + "km";
+		if (d < 10) return d.toFixed(1) + "m";
+		return Math.round(d) + "m";
+	}
+
+	function formatDy(dy) {
+		if (Math.abs(dy) < 1) return "·";
+		return (dy > 0 ? "↑" : "↓") + Math.round(Math.abs(dy));
+	}
+
+	// A waypoint on the other side of a portal is measured at the coordinates its
+	// portal links to (Nether = Overworld / 8), so "all dimensions" stays useful.
+	function projected(wp) {
+		if (!wp.dimensions.length || wp.dimensions.indexOf(player.dimensionKey) >= 0) return wp;
+		var from = wp.dimensions[0];
+		if (player.dimensionKey === "minecraft:the_nether" && from === "minecraft:overworld") return { x: wp.x / 8, y: wp.y, z: wp.z / 8 };
+		if (player.dimensionKey === "minecraft:overworld" && from === "minecraft:the_nether") return { x: wp.x * 8, y: wp.y, z: wp.z * 8 };
+		return wp;
+	}
+
+	function createRow(wp) {
+		var el = document.createElement("div");
+		el.className = "row";
+		el.innerHTML = '<span class="dot"></span><span class="name"></span><span class="dist"></span>'
+			+ '<span class="dy"></span><span class="arrow"><svg viewBox="0 0 26 26"><polygon points="13,2 22,24 13,18 4,24"/></svg></span>';
+		el.addEventListener("click", function () {
+			locked[wp.id] = !locked[wp.id];
+			render();
+		});
+		return el;
+	}
+
+	function updateRow(el, item) {
+		var wp = item.wp;
+		el.className = "row" + (wp.isDeath ? " death" : "") + (locked[wp.id] ? " locked" : "");
+		el.querySelector(".dot").style.background = wp.color;
+		var name = el.querySelector(".name");
+		var inDim = player && (wp.dimensions.length === 0 || wp.dimensions.indexOf(player.dimensionKey) >= 0);
+		name.textContent = (wp.isDeath ? "☠ " : "") + wp.name;
+		if (!inDim && wp.dimensions.length) {
+			var tag = document.createElement("small");
+			tag.textContent = JM.dimensionLabel(wp.dimensions[0]);
+			name.appendChild(tag);
+		}
+		el.querySelector(".dist").textContent = formatDistance(item.dist);
+		el.querySelector(".dy").textContent = formatDy(item.dy);
+		var arrow = el.querySelector(".arrow");
+		arrow.className = "arrow" + (Math.abs(item.rel) <= 12 ? " on-course" : "");
+		arrow.querySelector("svg").style.transform = "rotate(" + item.rel.toFixed(0) + "deg)";
+	}
+
+	function render() {
+		if (!player) return;
+		var showAll = showAllDimensions();
+		var deathFirst = String(window.deathFirst === undefined ? "1" : window.deathFirst) !== "0";
+		var maxRows = parseInt(window.maxRows, 10);
+		if (isNaN(maxRows) || maxRows < 1) maxRows = 12;
+
+		var list = waypoints.filter(function (wp) {
+			if (!wp.enabled) return false;
+			if (showAll) return true;
+			return wp.dimensions.length === 0 || wp.dimensions.indexOf(player.dimensionKey) >= 0;
+		}).map(function (wp) {
+			var at = projected(wp);
+			return {
+				wp: wp,
+				dist: JM.distance(player.x, player.y, player.z, at.x, at.y, at.z),
+				dy: at.y - player.y,
+				rel: JM.relativeBearing(player.heading, JM.bearingTo(player.x, player.z, at.x, at.z))
+			};
+		});
+		list.sort(function (a, b) {
+			var ad = (deathFirst && a.wp.isDeath) ? 0 : 1, bd = (deathFirst && b.wp.isDeath) ? 0 : 1;
+			if (ad !== bd) return ad - bd;
+			var al = locked[a.wp.id] ? 0 : 1, bl = locked[b.wp.id] ? 0 : 1;
+			if (al !== bl) return al - bl;
+			return a.dist - b.dist;
+		});
+
+		document.getElementById("title").textContent = "Waypoints · " + (showAll ? "all dimensions" : player.dimensionLabel);
+		document.getElementById("count").textContent = list.length ? String(list.length) : "";
+		document.getElementById("message").textContent = showAll ? "No waypoints" : "No waypoints in " + player.dimensionLabel;
+		document.getElementById("wrap").classList.toggle("empty-mode", list.length === 0);
+
+		var listEl = document.getElementById("list");
+		var seen = {};
+		list.slice(0, maxRows).forEach(function (item) {
+			var el = rows[item.wp.id] || createRow(item.wp);
+			rows[item.wp.id] = el;
+			seen[item.wp.id] = true;
+			updateRow(el, item);
+			listEl.appendChild(el);   // appending an existing node moves it: keeps the sort order
+		});
+		Object.keys(rows).forEach(function (id) {
+			if (!seen[id]) { rows[id].remove(); delete rows[id]; }
+		});
+	}
+
+	setOffline(true);
+	pollPlayer();
+	pollWaypoints();
+	setInterval(pollPlayer, 500);
+	setInterval(pollWaypoints, 2000);
+</script>
+</body>
+</html>

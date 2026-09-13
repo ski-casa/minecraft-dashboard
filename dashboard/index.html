@@ -1,0 +1,264 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Minecraft HUD</title>
+<style>
+	html, body {
+		margin: 0;
+		width: 100%;
+		height: 100%;
+		background: #000;
+		overflow: hidden;
+		font-family: "Segoe UI", sans-serif;
+	}
+	#grid {
+		box-sizing: border-box;
+		width: 100vw;
+		height: 100vh;
+		display: grid;
+		grid-auto-flow: dense;
+	}
+	.panel {
+		position: relative;
+		min-width: 0;
+		min-height: 0;
+		overflow: hidden;
+		background: #101014;
+	}
+	.panel iframe {
+		display: block;
+		border: 0;
+		width: 100%;
+		height: 100%;
+		background: #101014;
+	}
+	#errors {
+		display: none;
+		position: fixed;
+		left: 0;
+		right: 0;
+		top: 0;
+		z-index: 10;
+		margin: 0;
+		padding: 8px 14px;
+		background: rgba(120, 30, 30, 0.95);
+		color: #fff;
+		font: 14px/1.45 "Segoe UI", sans-serif;
+		white-space: pre-wrap;
+	}
+	#errors.show { display: block; }
+</style>
+</head>
+<body>
+	<pre id="errors"></pre>
+	<div id="grid"></div>
+	<script>
+		// Registered before config.js loads so a syntax error in it can be reported.
+		var lastScriptError = null;
+		window.addEventListener("error", function (e) {
+			if (e && e.filename && /config\.js/.test(e.filename)) lastScriptError = e.message;
+		});
+	</script>
+	<script src="config.js"></script>
+	<script>
+	// The layout is described by window.HUD_CONFIG from config.js (see README.md
+	// in this folder). This built-in layout is only used when config.js is
+	// missing or broken, so the screen still shows something useful.
+	var DEFAULT_CONFIG = {
+		grid: { columns: 16, rows: 9 },
+		apiBase: "http://localhost:8080",
+		panels: [
+			{ widget: "clock",       col: 1,  row: 1, colSpan: 3,  rowSpan: 3 },
+			{ widget: "coords",      col: 1,  row: 4, colSpan: 3,  rowSpan: 3 },
+			{ widget: "coords-tap",  col: 1,  row: 7, colSpan: 3,  rowSpan: 3 },
+			{ widget: "map",         col: 4,  row: 1, colSpan: 10, rowSpan: 9, params: { zoomLevel: 2, mapMode: "auto" } },
+			{ widget: "waypoints",   col: 14, row: 1, colSpan: 3,  rowSpan: 5 },
+			{ widget: "environment", col: 14, row: 6, colSpan: 3,  rowSpan: 4 }
+		]
+	};
+	var KNOWN_TOP = ["grid", "gap", "padding", "radius", "background", "panelBackground", "apiBase", "watchConfig", "watchInterval", "panels"];
+	var KNOWN_PANEL = ["widget", "url", "col", "row", "colSpan", "rowSpan", "params", "background"];
+
+	var current = null;        // last successfully applied config
+	var currentJson = null;
+	var currentErrors = [];
+
+	function isInt(v, min) {
+		return typeof v === "number" && isFinite(v) && Math.floor(v) === v && v >= min;
+	}
+
+	function px(value, fallback) {
+		if (typeof value === "number") return value + "px";
+		if (typeof value === "string" && value) return value;
+		return fallback + "px";
+	}
+
+	function buildSrc(panel, config) {
+		var base = panel.url || ("../widgets/" + panel.widget + "/index.html");
+		var params = new URLSearchParams();
+		if (!panel.url && config.apiBase) params.set("apiBase", String(config.apiBase));
+		if (panel.params) {
+			Object.keys(panel.params).forEach(function (key) { params.set(key, String(panel.params[key])); });
+		}
+		var query = params.toString();
+		return query ? base + (base.indexOf("?") >= 0 ? "&" : "?") + query : base;
+	}
+
+	// Checks the config and resolves every panel. Problems are collected as
+	// readable messages; panels with placement errors are skipped, the rest render.
+	function validate(config) {
+		var errors = [], panels = [];
+		if (!config || typeof config !== "object" || Array.isArray(config)) {
+			return { errors: ["window.HUD_CONFIG must be an object"], panels: [], columns: 16, rows: 9 };
+		}
+		Object.keys(config).forEach(function (key) {
+			if (KNOWN_TOP.indexOf(key) < 0) errors.push('Unknown setting "' + key + '" (ignored). Known: ' + KNOWN_TOP.join(", "));
+		});
+		var grid = (config.grid && typeof config.grid === "object") ? config.grid : {};
+		var columns = grid.columns, rows = grid.rows;
+		if (!isInt(columns, 1) || columns > 64) { errors.push("grid.columns must be a whole number from 1 to 64 (using 16)"); columns = 16; }
+		if (!isInt(rows, 1) || rows > 64) { errors.push("grid.rows must be a whole number from 1 to 64 (using 9)"); rows = 9; }
+		if (!Array.isArray(config.panels)) {
+			errors.push("panels must be an array of panel objects");
+			return { errors: errors, panels: [], columns: columns, rows: rows };
+		}
+
+		var occupied = {};   // "col,row" -> label of the panel already there
+		config.panels.forEach(function (p, i) {
+			var label = "panels[" + i + "]";
+			if (!p || typeof p !== "object") { errors.push(label + " is not an object"); return; }
+			if (typeof p.widget === "string") label += " (" + p.widget + ")";
+			else if (typeof p.url === "string") label += " (url)";
+			Object.keys(p).forEach(function (key) {
+				if (KNOWN_PANEL.indexOf(key) < 0) errors.push(label + ': unknown key "' + key + '" (ignored). Known: ' + KNOWN_PANEL.join(", "));
+			});
+
+			var widget = null, url = null;
+			if (typeof p.url === "string" && p.url) {
+				url = p.url;
+			} else if (typeof p.widget === "string" && /^[A-Za-z0-9_-]+$/.test(p.widget)) {
+				widget = p.widget;
+			} else {
+				errors.push(label + ': needs "widget" (a folder name under widgets/, e.g. "clock") or "url"');
+				return;
+			}
+
+			var colSpan = p.colSpan === undefined ? 1 : p.colSpan;
+			var rowSpan = p.rowSpan === undefined ? 1 : p.rowSpan;
+			if (!isInt(colSpan, 1)) { errors.push(label + ": colSpan must be a whole number >= 1"); return; }
+			if (!isInt(rowSpan, 1)) { errors.push(label + ": rowSpan must be a whole number >= 1"); return; }
+			if (colSpan > columns || rowSpan > rows) { errors.push(label + ": span " + colSpan + "x" + rowSpan + " does not fit a " + columns + "x" + rows + " grid"); return; }
+
+			var col = p.col, row = p.row;
+			if (col === undefined && row === undefined) {
+				col = null; row = null;    // auto-placed into the first free cells
+			} else {
+				if (!isInt(col, 1) || !isInt(row, 1)) { errors.push(label + ": col and row must both be whole numbers >= 1 (or both left out for auto placement)"); return; }
+				if (col + colSpan - 1 > columns) { errors.push(label + ": col " + col + " + colSpan " + colSpan + " runs past column " + columns); return; }
+				if (row + rowSpan - 1 > rows) { errors.push(label + ": row " + row + " + rowSpan " + rowSpan + " runs past row " + rows); return; }
+				var reported = {};
+				for (var c = col; c < col + colSpan; c++) {
+					for (var r = row; r < row + rowSpan; r++) {
+						var key = c + "," + r;
+						if (!occupied[key]) { occupied[key] = label; continue; }
+						if (reported[occupied[key]]) continue;
+						reported[occupied[key]] = true;
+						errors.push(label + " overlaps " + occupied[key] + " (first at column " + c + ", row " + r + ")");
+					}
+				}
+			}
+			if (p.params !== undefined && (!p.params || typeof p.params !== "object" || Array.isArray(p.params))) {
+				errors.push(label + ": params must be an object like { zoomLevel: 2 }");
+				return;
+			}
+
+			panels.push({
+				label: label,
+				empty: widget === "empty",
+				src: widget === "empty" ? null : buildSrc({ widget: widget, url: url, params: p.params }, config),
+				col: col, row: row, colSpan: colSpan, rowSpan: rowSpan,
+				background: (typeof p.background === "string") ? p.background : null
+			});
+		});
+		return { errors: errors, panels: panels, columns: columns, rows: rows };
+	}
+
+	function showErrors(list) {
+		var el = document.getElementById("errors");
+		if (!list.length) { el.className = ""; el.textContent = ""; return; }
+		el.className = "show";
+		el.textContent = "dashboard/config.js:\n" + list.map(function (e) { return "• " + e; }).join("\n");
+	}
+
+	function apply(config, extraErrors) {
+		var v = validate(config);
+		var grid = document.getElementById("grid");
+		grid.style.gridTemplateColumns = "repeat(" + v.columns + ", minmax(0, 1fr))";
+		grid.style.gridTemplateRows = "repeat(" + v.rows + ", minmax(0, 1fr))";
+		grid.style.gap = px(config.gap, 8);
+		grid.style.padding = px(config.padding, 8);
+		document.body.style.background = (typeof config.background === "string" && config.background) ? config.background : "#000";
+		var panelBackground = (typeof config.panelBackground === "string" && config.panelBackground) ? config.panelBackground : "#101014";
+
+		grid.innerHTML = "";
+		v.panels.forEach(function (p) {
+			var el = document.createElement("div");
+			el.className = "panel";
+			el.style.borderRadius = px(config.radius, 10);
+			el.style.background = p.background || panelBackground;
+			el.style.gridColumn = (p.col ? p.col + " / " : "") + "span " + p.colSpan;
+			el.style.gridRow = (p.row ? p.row + " / " : "") + "span " + p.rowSpan;
+			if (!p.empty) {
+				var frame = document.createElement("iframe");
+				frame.src = p.src;
+				frame.style.background = el.style.background;
+				el.appendChild(frame);
+			}
+			grid.appendChild(el);
+		});
+
+		current = config;
+		currentJson = JSON.stringify(config);
+		currentErrors = v.errors;
+		showErrors((extraErrors || []).concat(currentErrors));
+	}
+
+	// Re-reads config.js by loading it again as a script (works from file://,
+	// where fetch() of local files is blocked) and rebuilds only when it changed.
+	function checkConfig() {
+		window.HUD_CONFIG = undefined;
+		lastScriptError = null;
+		var script = document.createElement("script");
+		script.src = "config.js?t=" + Date.now();
+		script.onload = function () {
+			script.remove();
+			if (window.HUD_CONFIG === undefined) {
+				window.HUD_CONFIG = current;
+				showErrors(["config.js has an error" + (lastScriptError && lastScriptError !== "Script error." ? " (" + lastScriptError + ")" : "") + " – keeping the last good layout"].concat(currentErrors));
+				return;
+			}
+			var json = JSON.stringify(window.HUD_CONFIG);
+			if (json !== currentJson) apply(window.HUD_CONFIG);
+			else showErrors(currentErrors);
+		};
+		script.onerror = function () {
+			script.remove();
+			window.HUD_CONFIG = current;
+			showErrors(["config.js could not be loaded – keeping the last good layout"].concat(currentErrors));
+		};
+		document.head.appendChild(script);
+	}
+
+	if (window.HUD_CONFIG === undefined) {
+		apply(DEFAULT_CONFIG, ["config.js did not load or has an error" + (lastScriptError && lastScriptError !== "Script error." ? " (" + lastScriptError + ")" : "") + " – showing the built-in default layout"]);
+	} else {
+		apply(window.HUD_CONFIG);
+	}
+	if (!current || current.watchConfig !== false) {
+		var interval = (current && isInt(current.watchInterval, 500)) ? current.watchInterval : 3000;
+		setInterval(checkConfig, interval);
+	}
+	</script>
+</body>
+</html>

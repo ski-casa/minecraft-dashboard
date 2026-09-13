@@ -1,0 +1,200 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="apiBase" data-label="JourneyMap webmap URL" data-type="textfield" data-default="http://localhost:8080" />
+<style>
+	/* Sized from the panel's smaller side so the widget scales to any grid cell. */
+	html { font-size: 4.4vmin; }
+	html, body {
+		margin: 0;
+		padding: 0;
+		width: 100%;
+		height: 100%;
+		background: #101014;
+		color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+	}
+	.wrap {
+		box-sizing: border-box;
+		width: 100%;
+		height: 100%;
+		padding: 5% 7%;
+		display: flex;
+		flex-direction: column;
+		justify-content: space-between;
+	}
+	.biome-row {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.6em;
+		min-width: 0;
+	}
+	#biome {
+		font-size: 1.9em;
+		font-weight: 700;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		min-width: 0;
+	}
+	.tags { display: flex; gap: 0.35em; flex: none; }
+	.tag {
+		font-size: 0.8em;
+		padding: 0.12em 0.55em;
+		border-radius: 0.6em;
+		background: #22222a;
+		opacity: 0.9;
+		white-space: nowrap;
+	}
+	.tag.warn { background: #3a2a1b; color: #ffb454; }
+	.label {
+		font-size: 0.8em;
+		opacity: 0.55;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		margin-bottom: 0.1em;
+	}
+	.coords {
+		display: flex;
+		justify-content: space-between;
+		font-family: "Consolas", "Cascadia Mono", monospace;
+		font-size: 1.9em;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+	}
+	.coords b {
+		font-size: 0.55em;
+		font-weight: 600;
+		opacity: 0.55;
+		margin-right: 0.3em;
+	}
+	.coords.none {
+		font-family: "Segoe UI", sans-serif;
+		font-size: 1.2em;
+		font-weight: 600;
+		opacity: 0.6;
+	}
+	.chunk-row {
+		display: flex;
+		justify-content: space-between;
+		gap: 0.5em;
+		font-size: 0.95em;
+		opacity: 0.85;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+	.chunk-row b {
+		font-size: 0.85em;
+		font-weight: 600;
+		opacity: 0.55;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		margin-right: 0.3em;
+	}
+	.offline {
+		display: none;
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		align-items: center;
+		justify-content: center;
+		font-size: 1.3em;
+		opacity: 0.85;
+		background: #101014;
+	}
+	body.offline-mode .offline { display: flex; }
+</style>
+</head>
+<body>
+	<div class="wrap">
+		<div class="biome-row">
+			<div id="biome">--</div>
+			<div class="tags" id="tags"></div>
+		</div>
+		<div>
+			<div class="label" id="portalLabel">Portal link</div>
+			<div class="coords" id="portal">
+				<span><b>X</b><span id="px">--</span></span>
+				<span><b>Y</b><span id="py">--</span></span>
+				<span><b>Z</b><span id="pz">--</span></span>
+			</div>
+		</div>
+		<div class="chunk-row">
+			<span><b>Chunk</b><span id="chunk">--</span></span>
+			<span><b>In chunk</b><span id="inChunk">--</span></span>
+			<span><b>Region</b><span id="region">--</span></span>
+		</div>
+	</div>
+	<div class="offline">Minecraft not running</div>
+<script src="jm-api.js"></script>
+<script>
+	function setOffline(isOffline) {
+		document.body.classList.toggle("offline-mode", isOffline);
+	}
+
+	// "minecraft:cherry_grove" -> "Cherry Grove"; already-pretty names pass through.
+	function prettyBiome(biome) {
+		var s = String(biome || "").replace(/^[a-z0-9_.-]+:/i, "").replace(/_/g, " ");
+		return s.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); }) || "Unknown biome";
+	}
+
+	function tag(text, warn) {
+		var el = document.createElement("span");
+		el.className = "tag" + (warn ? " warn" : "");
+		el.textContent = text;
+		return el;
+	}
+
+	function render(p) {
+		document.getElementById("biome").textContent = prettyBiome(p.biome);
+		var tags = document.getElementById("tags");
+		tags.innerHTML = "";
+		tags.appendChild(tag(p.dimensionLabel));
+		if (p.underground) tags.appendChild(tag("underground", true));
+		if (p.sneaking) tags.appendChild(tag("sneaking"));
+
+		// Portal linking: Nether coords = Overworld / 8 (Y unchanged). The End has no link.
+		var bx = Math.floor(p.x), by = Math.floor(p.y), bz = Math.floor(p.z);
+		var portal = document.getElementById("portal");
+		var label = document.getElementById("portalLabel");
+		var link = null;
+		if (p.dimensionKey === "minecraft:the_nether") {
+			label.textContent = "Overworld portal link";
+			link = { x: bx * 8, y: by, z: bz * 8 };
+		} else if (p.dimensionKey === "minecraft:the_end") {
+			label.textContent = "Portal link";
+		} else {
+			label.textContent = "Nether portal link";
+			link = { x: Math.floor(bx / 8), y: by, z: Math.floor(bz / 8) };
+		}
+		if (link) {
+			portal.className = "coords";
+			portal.innerHTML = '<span><b>X</b><span id="px"></span></span><span><b>Y</b><span id="py"></span></span><span><b>Z</b><span id="pz"></span></span>';
+			document.getElementById("px").textContent = link.x;
+			document.getElementById("py").textContent = link.y;
+			document.getElementById("pz").textContent = link.z;
+		} else {
+			portal.className = "coords none";
+			portal.textContent = "No portal link from the End";
+		}
+
+		document.getElementById("chunk").textContent = (bx >> 4) + ", " + (bz >> 4);
+		document.getElementById("inChunk").textContent = (bx & 15) + ", " + (bz & 15);
+		document.getElementById("region").textContent = (bx >> 9) + ", " + (bz >> 9);
+	}
+
+	function poll() {
+		JM.fetchPlayer()
+			.then(function (p) { setOffline(false); render(p); })
+			.catch(function () { setOffline(true); });
+	}
+
+	setOffline(true);
+	poll();
+	setInterval(poll, 500);
+</script>
+</body>
+</html>

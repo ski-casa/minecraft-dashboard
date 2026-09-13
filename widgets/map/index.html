@@ -5,6 +5,11 @@
 <meta name="x-icue-property" data-name="apiBase" data-label="JourneyMap webmap URL" data-type="textfield" data-default="http://localhost:8080" />
 <meta name="x-icue-property" data-name="zoomLevel" data-label="Zoom level (-2 far ... 5 close)" data-type="textfield" data-default="2" />
 <meta name="x-icue-property" data-name="mapMode" data-label="Map mode (auto, day, night, topo)" data-type="textfield" data-default="auto" />
+<meta name="x-icue-property" data-name="entities" data-label="Entities on the map (all, none, or a list like mobs,players)" data-type="textfield" data-default="all" />
+<meta name="x-icue-property" data-name="waypoints" data-label="Show waypoints (1 or 0)" data-type="textfield" data-default="1" />
+<meta name="x-icue-property" data-name="labels" data-label="Name labels (all, players, waypoints, none)" data-type="textfield" data-default="all" />
+<meta name="x-icue-property" data-name="autoNight" data-label="Auto mode: night layer after dark (1 or 0)" data-type="textfield" data-default="1" />
+<meta name="x-icue-property" data-name="autoCaves" data-label="Auto mode: cave layer when underground (1 or 0)" data-type="textfield" data-default="1" />
 <link rel="stylesheet" href="leaflet.css" />
 <style>
 	html, body {
@@ -36,6 +41,57 @@
 		pointer-events: none;
 	}
 	#dimBadge { right: 8px; top: 8px; }
+	/* Entity and waypoint markers (Leaflet divIcons; the wrapper classes undo Leaflet's default box). */
+	.ent-wrap, .wp-wrap { background: none; border: 0; }
+	.ent {
+		position: relative;
+		width: 100%;
+		height: 100%;
+		border-radius: 50%;
+		background: rgba(16, 16, 20, 0.65);
+		box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55);
+	}
+	.ent img {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+		image-rendering: pixelated;
+	}
+	.ent.no-img { background: var(--c); }
+	.ent.hostile { box-shadow: 0 0 0 2px #ff3b3b, 0 0 6px #ff3b3b; }
+	.ent.player { border-radius: 4px; }
+	.wp {
+		width: 100%;
+		height: 100%;
+		box-sizing: border-box;
+		transform: rotate(45deg);
+		border: 2px solid #fff;
+		box-shadow: 0 0 3px #000;
+	}
+	.wp.death {
+		transform: none;
+		border: 0;
+		box-shadow: none;
+		color: #ff4d4d;
+		font-size: 18px;
+		line-height: 14px;
+		text-align: center;
+		text-shadow: 0 0 3px #000, 0 0 3px #000;
+	}
+	.marker-label {
+		position: absolute;
+		left: 50%;
+		top: 100%;
+		transform: translateX(-50%);
+		margin-top: 3px;
+		white-space: nowrap;
+		font-size: 11px;
+		font-weight: 600;
+		color: #fff;
+		text-shadow: 0 0 3px #000, 0 0 3px #000, 0 1px 2px #000;
+		pointer-events: none;
+	}
 	.offline {
 		display: none;
 		position: absolute;
@@ -61,27 +117,49 @@
 	// CRS.Simple with 512px tiles pinned to native zoom 0, so 1 map unit = 1 block
 	// and tile (x, y) covers blocks [512x, 512x+512) / [512y, 512y+512).
 	// Block (x, z) <-> latlng(-z, x).
-
 	var state = {
 		dimension: "minecraft:overworld",
+		dimensionKey: "minecraft:overworld",
 		mapType: "day",
 		slice: 0,
 		loadStamp: Date.now(),
 		tileVersions: {},     // "x,z" -> stamp, bumped when JourneyMap re-renders a region
 		lastImageCheck: Date.now(),
-		online: false
+		online: false,
+		player: null,
+		hostileCount: 0
 	};
 
+	// ---- settings (URL parameters / iCUE properties) ----
 	function configuredMode() {
 		var mode = (window.mapMode || "auto").trim().toLowerCase();
 		return ["day", "night", "topo"].indexOf(mode) >= 0 ? mode : "auto";
 	}
-
 	function configuredZoom() {
 		var z = parseInt(window.zoomLevel, 10);
 		return isNaN(z) ? 2 : Math.max(-2, Math.min(5, z));
 	}
+	function flag(name, fallback) {
+		var v = window[name];
+		if (v === undefined || v === "") return fallback;
+		v = String(v).trim().toLowerCase();
+		return v !== "0" && v !== "false" && v !== "no";
+	}
+	var KINDS = ["mobs", "animals", "villagers", "players"];
+	var FEATURE_FLAG = { mobs: "RadarMobs", animals: "RadarAnimals", villagers: "RadarVillagers", players: "RadarPlayers" };
+	var FALLBACK_COLOR = { mobs: "#ff5252", animals: "#7fd68a", villagers: "#c58cff", players: "#3ea6ff" };
+	function enabledKinds() {
+		var v = String(window.entities === undefined ? "all" : window.entities).trim().toLowerCase();
+		if (v === "none" || v === "0" || v === "false") return [];
+		if (v === "all" || v === "1" || v === "true" || v === "") return KINDS.slice();
+		return v.split(",").map(function (k) { return k.trim(); }).filter(function (k) { return KINDS.indexOf(k) >= 0; });
+	}
+	function labelsMode() {
+		var v = String(window.labels === undefined ? "all" : window.labels).trim().toLowerCase();
+		return ["all", "players", "waypoints", "none"].indexOf(v) >= 0 ? v : "all";
+	}
 
+	// ---- map + tiles ----
 	var JMTileLayer = L.TileLayer.extend({
 		getTileUrl: function (coords) {
 			var version = state.tileVersions[coords.x + "," + coords.y] || state.loadStamp;
@@ -95,7 +173,6 @@
 				+ "&t=" + version;
 		}
 	});
-
 	var map = L.map("map", {
 		crs: L.CRS.Simple,
 		zoomControl: false,
@@ -110,7 +187,6 @@
 		minZoom: -2,
 		maxZoom: 5
 	}).setView([0, 0], configuredZoom());
-
 	var tiles = new JMTileLayer("", {
 		tileSize: 512,
 		minNativeZoom: 0,
@@ -120,6 +196,8 @@
 		updateWhenIdle: false,
 		keepBuffer: 2
 	}).addTo(map);
+	var waypointLayer = L.layerGroup().addTo(map);
+	var entityLayer = L.layerGroup().addTo(map);
 
 	// Arrow points up at rotation 0; heading 0 = south = down-screen, hence +180.
 	var arrowIcon = L.divIcon({
@@ -130,20 +208,28 @@
 			+ '<polygon points="13,2 22,24 13,18 4,24" fill="#3ea6ff" stroke="#0b2a40" stroke-width="1.5"/>'
 			+ '</svg>'
 	});
-	var marker = L.marker([0, 0], { icon: arrowIcon, interactive: false }).addTo(map);
+	var marker = L.marker([0, 0], { icon: arrowIcon, interactive: false, zIndexOffset: 1000 }).addTo(map);
 
 	function setOffline(isOffline) {
+		if (isOffline && state.online) { clearEntities(); clearWaypoints(); }
 		state.online = !isOffline;
 		document.body.classList.toggle("offline-mode", isOffline);
 	}
 
+	// Which tile layer to show. Explicit day/night/topo always win; "auto" follows
+	// the game: cave layer underground (and always in the Nether, which has no
+	// sky), night layer after dark, surface otherwise.
 	function desiredView(player) {
-		// The Nether has no sky, so JourneyMap only has cave-layer tiles for it.
-		if (player.dimension === "minecraft:the_nether" || player.dimension === -1) {
-			return { mapType: "underground", slice: Math.floor(player.y) >> 4 };
-		}
+		var caveSlice = Math.floor(player.y) >> 4;
+		if (player.dimensionKey === "minecraft:the_nether") return { mapType: "underground", slice: caveSlice };
 		var mode = configuredMode();
-		return { mapType: mode === "auto" ? "day" : mode, slice: 0 };
+		if (mode !== "auto") return { mapType: mode, slice: 0 };
+		if (player.underground && flag("autoCaves", true)) return { mapType: "underground", slice: caveSlice };
+		if (flag("autoNight", true) && player.worldTime !== null) {
+			var t = ((player.worldTime % 24000) + 24000) % 24000;
+			if (t >= 13000 && t < 23000) return { mapType: "night", slice: 0 };
+		}
+		return { mapType: "day", slice: 0 };
 	}
 
 	function applyView(player) {
@@ -151,8 +237,10 @@
 		var dim = (typeof player.dimension === "number")
 			? player.dimension
 			: (player.dimension || "minecraft:overworld");
-		var changed = dim !== state.dimension || want.mapType !== state.mapType || want.slice !== state.slice;
+		var dimChanged = dim !== state.dimension;
+		var changed = dimChanged || want.mapType !== state.mapType || want.slice !== state.slice;
 		state.dimension = dim;
+		state.dimensionKey = player.dimensionKey || JM.dimensionKey(dim);
 		state.mapType = want.mapType;
 		state.slice = want.slice;
 		if (changed) {
@@ -160,8 +248,24 @@
 			state.loadStamp = Date.now();
 			tiles.redraw();
 		}
-		document.getElementById("dimBadge").textContent =
-			player.dimensionLabel + (state.mapType === "underground" ? " · y" + Math.floor(player.y) : "");
+		if (dimChanged) {
+			// Markers from the previous dimension are meaningless here; the next polls refill.
+			clearEntities();
+			clearWaypoints();
+		}
+		state.player = player;
+		updateBadge();
+	}
+
+	function updateBadge() {
+		var p = state.player;
+		if (!p) return;
+		var text = p.dimensionLabel;
+		if (state.mapType === "underground") text += " · y" + Math.floor(p.y);
+		else if (state.mapType === "night") text += " · night";
+		else if (state.mapType === "topo") text += " · topo";
+		if (state.hostileCount) text += " · " + state.hostileCount + " hostile";
+		document.getElementById("dimBadge").textContent = text;
 	}
 
 	function pollPlayer() {
@@ -218,10 +322,148 @@
 		}
 	}
 
+	// ---- entities (JourneyMap radar: /data/mobs, /data/animals, /data/villagers, /data/players) ----
+	// Each list covers the client's render distance. Icons are JourneyMap's own
+	// entity sprites served by /resources; other players get their skin face from /skin.
+	var entityMarkers = {};   // entityId -> Leaflet marker
+
+	function esc(s) {
+		return String(s).replace(/[&<>"']/g, function (c) {
+			return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+		});
+	}
+	function values(data) {
+		if (Array.isArray(data)) return data;
+		if (data && typeof data === "object") return Object.keys(data).map(function (k) { return data[k]; });
+		return [];
+	}
+	function argbToHex(n) {
+		if (typeof n !== "number") return null;
+		return "#" + ("000000" + (n & 0xffffff).toString(16)).slice(-6);
+	}
+
+	function entityIcon(e) {
+		var src = e.kind === "players"
+			? JM.apiBase() + "/skin/" + encodeURIComponent(e.id)
+			: (e.icon ? JM.apiBase() + "/resources?resource=" + encodeURIComponent(e.icon) : "");
+		var color = argbToHex(e.color) || FALLBACK_COLOR[e.kind];
+		var cls = "ent " + e.kind.replace(/s$/, "") + (e.hostile ? " hostile" : "") + (src ? "" : " no-img");
+		var html = '<div class="' + cls + '" style="--c:' + esc(color) + '">'
+			+ (src ? '<img src="' + esc(src) + '" onerror="this.parentNode.classList.add(&quot;no-img&quot;); this.remove();" />' : "")
+			+ '</div>';
+		var mode = labelsMode();
+		if (e.kind === "players" && e.username && (mode === "all" || mode === "players")) {
+			html += '<div class="marker-label">' + esc(e.username) + '</div>';
+		}
+		var size = e.kind === "players" ? 22 : 24;
+		return L.divIcon({ className: "ent-wrap", html: html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+	}
+
+	function clearEntities() {
+		entityLayer.clearLayers();
+		entityMarkers = {};
+		state.hostileCount = 0;
+	}
+
+	function pollEntities() {
+		if (!state.online) return;
+		var kinds = enabledKinds();
+		JM.fetchWorld().catch(function () { return {}; }).then(function (world) {
+			var features = world.features || {};
+			var wanted = kinds.filter(function (k) { return features[FEATURE_FLAG[k]] !== false; });
+			return Promise.all(wanted.map(function (k) {
+				return JM.getJson("/data/" + k)
+					.then(function (d) { return { kind: k, list: values(d) }; })
+					.catch(function () { return { kind: k, list: [] }; });
+			}));
+		}).then(function (results) {
+			if (!state.online) return;
+			var seen = {}, hostiles = 0;
+			var selfName = state.player ? state.player.username : "";
+			results.forEach(function (r) {
+				r.list.forEach(function (raw) {
+					if (!raw || typeof raw.posX !== "number" || typeof raw.posZ !== "number") return;
+					if (raw.invisible) return;
+					if (raw.dimension !== undefined && raw.dimension !== null && JM.dimensionKey(raw.dimension) !== state.dimensionKey) return;
+					if (r.kind === "players" && selfName && raw.username === selfName) return;
+					var id = String(raw.entityId || raw.playerId || (r.kind + ":" + raw.posX + "," + raw.posZ));
+					var e = { id: id, kind: r.kind, hostile: !!raw.hostile, icon: raw.iconLocation || "", username: raw.username || "", color: raw.color };
+					if (e.hostile) hostiles++;
+					var pos = [-raw.posZ, raw.posX];
+					var m = entityMarkers[id];
+					if (!m) {
+						m = L.marker(pos, { icon: entityIcon(e), interactive: false, zIndexOffset: 500 }).addTo(entityLayer);
+						entityMarkers[id] = m;
+					} else {
+						m.setLatLng(pos);
+					}
+					seen[id] = true;
+				});
+			});
+			Object.keys(entityMarkers).forEach(function (id) {
+				if (!seen[id]) { entityLayer.removeLayer(entityMarkers[id]); delete entityMarkers[id]; }
+			});
+			state.hostileCount = hostiles;
+			updateBadge();
+		});
+	}
+
+	// ---- waypoints (/data/waypoints) ----
+	var waypointMarkers = {};   // id|name|color -> Leaflet marker (key changes when the waypoint is edited)
+
+	function waypointIcon(wp) {
+		var mode = labelsMode();
+		var html = wp.isDeath
+			? '<div class="wp death">☠</div>'
+			: '<div class="wp" style="background:' + esc(wp.color) + '"></div>';
+		if (wp.isDeath || mode === "all" || mode === "waypoints") {
+			html += '<div class="marker-label">' + esc(wp.name) + '</div>';
+		}
+		return L.divIcon({ className: "wp-wrap", html: html, iconSize: [14, 14], iconAnchor: [7, 7] });
+	}
+
+	function clearWaypoints() {
+		waypointLayer.clearLayers();
+		waypointMarkers = {};
+	}
+
+	function pollWaypoints() {
+		if (!state.online) return;
+		JM.fetchWaypoints().then(function (list) {
+			if (!state.online) return;
+			var seen = {};
+			list.forEach(function (wp) {
+				if (!wp.enabled || !wp.showOnMap) return;
+				if (wp.dimensions.length && wp.dimensions.indexOf(state.dimensionKey) < 0) return;
+				var key = wp.id + "|" + wp.name + "|" + wp.color + "|" + wp.isDeath;
+				var pos = [-wp.z, wp.x];
+				var m = waypointMarkers[key];
+				if (!m) {
+					m = L.marker(pos, { icon: waypointIcon(wp), interactive: false }).addTo(waypointLayer);
+					waypointMarkers[key] = m;
+				} else {
+					m.setLatLng(pos);
+				}
+				seen[key] = true;
+			});
+			Object.keys(waypointMarkers).forEach(function (key) {
+				if (!seen[key]) { waypointLayer.removeLayer(waypointMarkers[key]); delete waypointMarkers[key]; }
+			});
+		}).catch(function () { /* keep what is shown; next poll retries */ });
+	}
+
 	setOffline(true);
 	pollPlayer();
 	setInterval(pollPlayer, 500);
 	setInterval(pollChangedTiles, 2500);
+	if (enabledKinds().length) {
+		pollEntities();
+		setInterval(pollEntities, 1000);
+	}
+	if (flag("waypoints", true)) {
+		pollWaypoints();
+		setInterval(pollWaypoints, 3000);
+	}
 </script>
 </body>
 </html>

@@ -1,0 +1,17 @@
+{
+	"author": "steve",
+	"id": "com.icuehud.widgets.waypoints",
+	"name": "MC Waypoints",
+	"description": "Nearest JourneyMap waypoints with distance, height difference and a direction arrow relative to where you face. Death points are pinned to the top; tap a row to keep it there.",
+	"version": "0.1.0",
+	"preview_icon": "icon.png",
+	"min_framework_version": "1.4.0",
+	"min_app_version": "5.47.0",
+	"os": [
+		{ "platform": "windows" }
+	],
+	"supported_devices": [
+		{ "type": "dashboard_lcd" }
+	],
+	"interactive": true
+}

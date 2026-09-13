@@ -1,0 +1,252 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="apiBase" data-label="JourneyMap webmap URL" data-type="textfield" data-default="http://localhost:8080" />
+<meta name="x-icue-property" data-name="hourFormat" data-label="Clock format (24 or 12)" data-type="textfield" data-default="24" />
+<style>
+	/* Sized from the panel's smaller side so the widget scales to any grid cell. */
+	html { font-size: 4.4vmin; }
+	html, body {
+		margin: 0;
+		padding: 0;
+		width: 100%;
+		height: 100%;
+		background: #101014;
+		color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+	}
+	.wrap {
+		box-sizing: border-box;
+		width: 100%;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+	}
+	.sky {
+		position: relative;
+		flex: 1 1 auto;
+		min-height: 0;
+		background: linear-gradient(#0f2f66, #3d7ed8);
+		transition: background 1.5s;
+	}
+	.wrap.day .sky   { background: linear-gradient(#1c4f9e, #63a6ee); }
+	.wrap.dusk .sky  { background: linear-gradient(#2a2757, #e8834a); }
+	.wrap.night .sky { background: linear-gradient(#05081a, #1a2450); }
+	.wrap.dawn .sky  { background: linear-gradient(#2b2a5e, #f0a765); }
+	.sky svg {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+	}
+	.corner {
+		position: absolute;
+		top: 0.35em;
+		font-size: 1.1em;
+		font-weight: 600;
+		text-shadow: 0 0 0.4em rgba(0, 0, 0, 0.7);
+	}
+	#phase { left: 0.6em; }
+	#day { right: 0.6em; opacity: 0.85; }
+	#clock {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0.1em;
+		text-align: center;
+		font-family: "Consolas", "Cascadia Mono", monospace;
+		font-size: 3.4em;
+		font-weight: 700;
+		line-height: 1;
+		font-variant-numeric: tabular-nums;
+		text-shadow: 0 0 0.25em rgba(0, 0, 0, 0.7);
+	}
+	#clock small {
+		font-size: 0.4em;
+		font-weight: 600;
+		opacity: 0.85;
+		margin-left: 0.2em;
+	}
+	.footer {
+		flex: none;
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-end;
+		gap: 0.6em;
+		padding: 0.4em 0.8em 0.45em;
+	}
+	.stat { min-width: 0; }
+	.stat.right { text-align: right; }
+	.stat .label {
+		font-size: 0.78em;
+		opacity: 0.55;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		white-space: nowrap;
+	}
+	.stat .value {
+		font-family: "Consolas", "Cascadia Mono", monospace;
+		font-size: 1.5em;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+		line-height: 1.1;
+	}
+	.stat .value.ok { color: #7fd68a; }
+	.stat .value.warn { color: #ffb454; }
+	.offline {
+		display: none;
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		align-items: center;
+		justify-content: center;
+		font-size: 1.3em;
+		opacity: 0.85;
+		background: #101014;
+	}
+	body.offline-mode .offline { display: flex; }
+</style>
+</head>
+<body>
+	<div class="wrap" id="wrap">
+		<div class="sky">
+			<svg viewBox="0 0 260 100" preserveAspectRatio="xMidYMax meet">
+				<path d="M 46 92 A 84 84 0 0 1 214 92" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="3 3" />
+				<line x1="10" y1="92" x2="250" y2="92" stroke="rgba(255,255,255,0.35)" stroke-width="1" />
+				<circle id="moon" cx="46" cy="92" r="7" fill="#e5ebf7" opacity="0" />
+				<circle id="sun" cx="46" cy="92" r="8" fill="#ffd84a" opacity="0" />
+			</svg>
+			<div class="corner" id="phase">--</div>
+			<div class="corner" id="day"></div>
+			<div id="clock">--:--</div>
+		</div>
+		<div class="footer">
+			<div class="stat"><div class="label" id="nextLabel">Next</div><div class="value" id="nextValue">--</div></div>
+			<div class="stat"><div class="label">Bed</div><div class="value" id="bed">--</div></div>
+			<div class="stat right"><div class="label">Tick</div><div class="value" id="tick">--</div></div>
+		</div>
+	</div>
+	<div class="offline">Minecraft not running</div>
+<script src="jm-api.js"></script>
+<script>
+	// A Minecraft day is 24000 ticks at 20 ticks/s (20 real minutes); tick 0 = 06:00.
+	// 0-12000 sun up, 12000-13000 dusk, 13000-23000 night, 23000-24000 dawn.
+	// Beds work from 12542 to 23459 in clear weather.
+	var DAY = 24000, NIGHT_AT = 13000, DAWN_AT = 23000, BED_FROM = 12542, BED_TO = 23460;
+	var sync = null;      // { ticks, at: performance.now() when fetched, paused }
+	var lastRaw = null, repeats = 0, lastShown = null;
+
+	function setOffline(isOffline) {
+		document.body.classList.toggle("offline-mode", isOffline);
+	}
+
+	function poll() {
+		JM.fetchWorld({ maxAge: 0 })
+			.then(function (world) {
+				if (typeof world.time !== "number") throw new Error("no world time");
+				// JourneyMap refreshes its world data about once a second, so one repeated
+				// value is normal. Three in a row means time is not moving (game paused,
+				// or the daylight cycle is frozen): stop interpolating.
+				repeats = (lastRaw !== null && world.time === lastRaw) ? repeats + 1 : 0;
+				lastRaw = world.time;
+				sync = { ticks: world.time, at: performance.now(), paused: repeats >= 3 };
+				setOffline(false);
+			})
+			.catch(function () {
+				sync = null;
+				lastRaw = null;
+				repeats = 0;
+				lastShown = null;
+				setOffline(true);
+			});
+	}
+
+	// Ticks advance 20/s between polls so the clock runs smoothly.
+	function currentTicks() {
+		if (!sync) return null;
+		if (sync.paused) return sync.ticks;
+		return sync.ticks + (performance.now() - sync.at) / 50;
+	}
+
+	function pad(n) { return (n < 10 ? "0" : "") + n; }
+
+	function mmss(ticks) {
+		var s = Math.max(0, Math.round(ticks / 20));
+		return Math.floor(s / 60) + ":" + pad(s % 60);
+	}
+
+	function render() {
+		var total = currentTicks();
+		if (total === null) return;
+		// A resync can land a few ticks behind the interpolated value; hold rather
+		// than tick backwards. A real jump (/time set) is far larger and shows at once.
+		if (lastShown !== null && total < lastShown && lastShown - total < 200) total = lastShown;
+		lastShown = total;
+		var t = ((total % DAY) + DAY) % DAY;
+
+		var minutesOfDay = ((t + 6000) % DAY) / DAY * 1440;
+		var h = Math.floor(minutesOfDay / 60), m = Math.floor(minutesOfDay % 60);
+		var clock = document.getElementById("clock");
+		if (String(window.hourFormat || "24").trim() === "12") {
+			var h12 = h % 12;
+			if (h12 === 0) h12 = 12;
+			clock.innerHTML = h12 + ":" + pad(m) + "<small>" + (h >= 12 ? "PM" : "AM") + "</small>";
+		} else {
+			clock.textContent = pad(h) + ":" + pad(m);
+		}
+
+		var phase = t < 12000 ? "day" : (t < NIGHT_AT ? "dusk" : (t < DAWN_AT ? "night" : "dawn"));
+		document.getElementById("wrap").className = "wrap " + phase;
+		document.getElementById("phase").textContent =
+			{ day: "Day", dusk: "Dusk", night: "Night", dawn: "Dawn" }[phase] + (sync.paused ? " · frozen" : "");
+
+		// The sun travels the arc left-to-right over ticks 0-12000, the moon over 12000-24000.
+		var sunUp = t < 12000;
+		var frac = sunUp ? t / 12000 : (t - 12000) / 12000;
+		var angle = Math.PI * (1 - frac);
+		var body = document.getElementById(sunUp ? "sun" : "moon");
+		body.setAttribute("cx", (130 + 84 * Math.cos(angle)).toFixed(1));
+		body.setAttribute("cy", (92 - 84 * Math.sin(angle)).toFixed(1));
+		document.getElementById("sun").setAttribute("opacity", sunUp ? "1" : "0");
+		document.getElementById("moon").setAttribute("opacity", sunUp ? "0" : "1");
+
+		// JourneyMap may report the wrapped time of day or the full world time; only the latter gives a day count.
+		document.getElementById("day").textContent = total >= DAY ? "Day " + (Math.floor(total / DAY) + 1) : "";
+
+		var nextLabel = document.getElementById("nextLabel"), nextValue = document.getElementById("nextValue");
+		if (t < NIGHT_AT) {
+			nextLabel.textContent = "Night in";
+			nextValue.textContent = mmss(NIGHT_AT - t);
+			nextValue.className = "value" + (NIGHT_AT - t < 1200 ? " warn" : "");
+		} else if (t < DAWN_AT) {
+			nextLabel.textContent = "Dawn in";
+			nextValue.textContent = mmss(DAWN_AT - t);
+			nextValue.className = "value";
+		} else {
+			nextLabel.textContent = "Day in";
+			nextValue.textContent = mmss(DAY - t);
+			nextValue.className = "value ok";
+		}
+
+		var bed = document.getElementById("bed");
+		if (t >= BED_FROM && t < BED_TO) {
+			bed.textContent = "now";
+			bed.className = "value ok";
+		} else {
+			bed.textContent = mmss(((BED_FROM - t) % DAY + DAY) % DAY);
+			bed.className = "value";
+		}
+
+		document.getElementById("tick").textContent = Math.floor(t);
+	}
+
+	setOffline(true);
+	poll();
+	setInterval(poll, 1000);
+	setInterval(render, 100);
+</script>
+</body>
+</html>
