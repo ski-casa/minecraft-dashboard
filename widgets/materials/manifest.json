@@ -1,0 +1,17 @@
+{
+	"author": "steve",
+	"id": "com.icuehud.widgets.materials",
+	"name": "MC Materials",
+	"description": "Progress on a list of build materials, counting your inventory plus the chests you placed, read from the iCUE HUD Bridge mod.",
+	"version": "0.2.0",
+	"preview_icon": "icon.png",
+	"min_framework_version": "1.4.0",
+	"min_app_version": "5.47.0",
+	"os": [
+		{ "platform": "windows" }
+	],
+	"supported_devices": [
+		{ "type": "dashboard_lcd" }
+	],
+	"interactive": false
+}

@@ -6,7 +6,7 @@
 .DESCRIPTION
     - Detects the newest installed Fabric profile in %APPDATA%\.minecraft\versions
       (override with -McVersion).
-    - Downloads the matching JourneyMap + JourneyMap WebMap (and Borderless Mining
+    - Downloads the matching JourneyMap + JourneyMap WebMap (and Borderless Fullscreen
       unless -SkipBorderless) jars from Modrinth into the mods folder, replacing
       any versions this script previously installed.
     - Sets pauseOnLostFocus:false in options.txt so solo play keeps running when
@@ -76,7 +76,7 @@ $projects = @(
 )
 if (-not $SkipBorderless) {
     # First slug with a build for this MC version wins.
-    $projects += @{ Slugs = @('cubes-without-borders', 'borderless-mining'); Required = $false; Label = 'Borderless fullscreen (no minimize on focus loss)' }
+    $projects += @{ Slugs = @('borderless-fullscreen', 'cubes-without-borders'); Required = $false; Label = 'Borderless fullscreen (no minimize on focus loss)' }
 }
 
 $previousState = @{}
@@ -201,6 +201,16 @@ if ($webmapConfigs) {
 } else {
     Write-Host "`nNo JourneyMap webmap config yet - it is created on the first game launch."
     Write-Host "Launch Minecraft once, then re-run this script to pin the webmap to port $WebmapPort."
+}
+
+# --- 6. The repo's own mod (armor + materials widgets), if it has been built --
+$builtJar = Get-ChildItem -Path (Join-Path (Split-Path $PSScriptRoot -Parent) 'mod\build\libs') -Filter 'icuehud-*.jar' -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -notmatch '-(sources|dev)\.jar$' } | Select-Object -First 1
+if ($builtJar) {
+    Write-Host ""
+    & (Join-Path $PSScriptRoot 'build-mod.ps1') -SkipBuild -MinecraftDir $MinecraftDir
+} else {
+    Write-Host "`niCUE HUD Bridge mod not built yet; run scripts\build-mod.ps1 for the armor and materials widgets."
 }
 
 Write-Host "`nDone. Launch Minecraft with the Fabric profile and check http://localhost:$WebmapPort/data/player once you're in a world."

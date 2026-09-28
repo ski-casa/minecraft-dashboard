@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="x-icue-property" data-name="apiBase" data-label="JourneyMap webmap URL" data-type="textfield" data-default="http://localhost:8080" />
+<meta name="x-icue-property" data-name="modApiBase" data-label="iCUE HUD Bridge mod URL (for the in-game capture key)" data-type="textfield" data-default="http://localhost:27421" />
+<meta name="x-icue-property" data-name="hotkey" data-label="Also capture when N is pressed in game (1 or 0; needs the mod)" data-type="textfield" data-default="1" />
 <style>
 	/* Sized from the panel's smaller side so the widget scales to any grid cell. */
 	html { font-size: 4.4vmin; }
@@ -84,27 +86,32 @@
 <script>
 	var wrap = document.getElementById("wrap");
 
-	function timeStamp() {
-		var now = new Date();
-		return ("0" + now.getHours()).slice(-2) + ":" + ("0" + now.getMinutes()).slice(-2);
+	function timeStamp(date) {
+		var d = date || new Date();
+		return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
 	}
 
-	function capture() {
+	function show(p, when) {
+		wrap.classList.remove("empty-mode");
+		document.getElementById("x").textContent = p.x.toFixed(1);
+		document.getElementById("y").textContent = p.y.toFixed(1);
+		document.getElementById("z").textContent = p.z.toFixed(1);
+		document.getElementById("dim").textContent = p.dimensionLabel;
+		var status = document.getElementById("status");
+		status.textContent = "⚑ " + timeStamp(when);
+		status.classList.remove("error");
+	}
+
+	// A tap captures the current position from JourneyMap; the in-game key hands
+	// the position the mod stamped at the key press (see pollHotkey).
+	function capture(point, when) {
 		wrap.classList.remove("flash");
 		void wrap.offsetWidth; // restart the flash animation on every tap
 		wrap.classList.add("flash");
 
+		if (point) { show(point, when); return; }
 		JM.fetchPlayer()
-			.then(function (p) {
-				wrap.classList.remove("empty-mode");
-				document.getElementById("x").textContent = p.x.toFixed(1);
-				document.getElementById("y").textContent = p.y.toFixed(1);
-				document.getElementById("z").textContent = p.z.toFixed(1);
-				document.getElementById("dim").textContent = p.dimensionLabel;
-				var status = document.getElementById("status");
-				status.textContent = "⚑ " + timeStamp();
-				status.classList.remove("error");
-			})
+			.then(function (p) { show(p); })
 			.catch(function () {
 				// Keep the last captured coords on screen; just flag the failed tap.
 				if (wrap.classList.contains("empty-mode")) {
@@ -120,7 +127,27 @@
 			});
 	}
 
-	wrap.addEventListener("click", capture);
+	wrap.addEventListener("click", function () { capture(); });
+
+	// In-game capture key (N by default, set in the mod): the mod's /state carries the
+	// last key press as { at, x, y, z, dimension }; a new timestamp means a new capture.
+	// The first poll also restores the last capture, so a dashboard reload keeps it.
+	var lastCaptureAt = null;
+	function pollHotkey() {
+		JM.fetchState()
+			.then(function (state) {
+				var c = state && state.capture;
+				if (!c || c.at === lastCaptureAt) return;
+				lastCaptureAt = c.at;
+				capture({ x: c.x, y: c.y, z: c.z, dimensionLabel: JM.dimensionLabel(c.dimension) }, new Date(c.at));
+			})
+			.catch(function () { /* mod not running; taps still work */ });
+	}
+	var hotkey = String(window.hotkey === undefined ? "1" : window.hotkey).toLowerCase();
+	if (hotkey !== "0" && hotkey !== "false" && hotkey !== "no") {
+		pollHotkey();
+		setInterval(pollHotkey, 500);
+	}
 </script>
 </body>
 </html>

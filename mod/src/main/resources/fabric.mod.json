@@ -1,0 +1,23 @@
+{
+	"schemaVersion": 1,
+	"id": "icuehud",
+	"version": "${version}",
+	"name": "iCUE HUD Bridge",
+	"description": "Serves your inventory, armor durability and the contents of chests you placed over a local HTTP API for the Xeneon Edge dashboard.",
+	"authors": [
+		"steve"
+	],
+	"license": "MIT",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"com.icuehud.client.IcueHudClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

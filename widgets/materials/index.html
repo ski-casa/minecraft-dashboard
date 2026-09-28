@@ -1,0 +1,267 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="modApiBase" data-label="iCUE HUD Bridge mod URL" data-type="textfield" data-default="http://localhost:27421" />
+<meta name="x-icue-property" data-name="items" data-label="Materials, e.g. smooth_stone:1242, white_stained_glass:418" data-type="textfield" data-default="" />
+<meta name="x-icue-property" data-name="title" data-label="Title (blank for none)" data-type="textfield" data-default="Materials" />
+<meta name="x-icue-property" data-name="hideDone" data-label="Hide finished items (1 or 0)" data-type="textfield" data-default="0" />
+<meta name="x-icue-property" data-name="sort" data-label="Order: list (as written) or remaining (most missing first)" data-type="textfield" data-default="list" />
+<style>
+	/* Sized from the panel's smaller side so the widget scales to any grid cell. */
+	html { font-size: 4.4vmin; }
+	html, body {
+		margin: 0;
+		padding: 0;
+		width: 100%;
+		height: 100%;
+		background: #101014;
+		color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+	}
+	.wrap {
+		box-sizing: border-box;
+		width: 100%;
+		height: 100%;
+		padding: 4% 6%;
+		display: flex;
+		flex-direction: column;
+		gap: 0.3em;
+	}
+	.title {
+		font-size: 1.1em;
+		font-weight: 600;
+		opacity: 0.6;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+	}
+	.title:empty { display: none; }
+	.list {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.45em;
+		overflow: hidden;
+	}
+	.row {
+		display: grid;
+		grid-template-columns: auto 1fr auto;
+		grid-template-rows: auto auto;
+		column-gap: 0.5em;
+		row-gap: 0.15em;
+		align-items: center;
+	}
+	.icon {
+		grid-row: 1 / span 2;
+		width: 1.9em;
+		height: 1.9em;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 0.25em;
+		background: rgba(255, 255, 255, 0.05);
+		font-weight: 700;
+		opacity: 0.9;
+	}
+	.icon img { width: 1.6em; height: 1.6em; image-rendering: pixelated; }
+	.name {
+		font-size: 1em;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.count {
+		font-family: "Consolas", "Cascadia Mono", monospace;
+		font-size: 1.05em;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+	.count .need { opacity: 0.55; font-weight: 400; }
+	.bar {
+		grid-column: 2 / span 2;
+		height: 0.45em;
+		border-radius: 0.25em;
+		background: rgba(255, 255, 255, 0.1);
+		overflow: hidden;
+		display: flex;
+	}
+	.bar .inv { height: 100%; background: #3ea6ff; transition: width 0.3s; }
+	.bar .box { height: 100%; background: #7fd68a; transition: width 0.3s; }
+	.row.done .count { color: #34c759; }
+	.row.done .bar .inv, .row.done .bar .box { background: #34c759; }
+	.row.done .name { opacity: 0.6; }
+	.row.done .name::after { content: " ✓"; color: #34c759; }
+	.footer {
+		display: flex;
+		justify-content: space-between;
+		gap: 0.5em;
+		font-size: 0.85em;
+		opacity: 0.55;
+		white-space: nowrap;
+	}
+	.footer .hint { color: #ffd60a; opacity: 1; }
+	.legend { display: flex; gap: 0.8em; }
+	.legend span::before {
+		content: "";
+		display: inline-block;
+		width: 0.7em;
+		height: 0.7em;
+		border-radius: 0.15em;
+		margin-right: 0.3em;
+		vertical-align: -0.05em;
+	}
+	.legend .l-inv::before { background: #3ea6ff; }
+	.legend .l-box::before { background: #7fd68a; }
+	.empty-list {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		font-size: 0.95em;
+		opacity: 0.55;
+		padding: 0 5%;
+	}
+	.offline {
+		display: none;
+		flex: 1;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		font-size: 1.3em;
+		opacity: 0.6;
+	}
+	.wrap.offline-mode .list, .wrap.offline-mode .footer, .wrap.offline-mode .empty-list { display: none; }
+	.wrap.offline-mode .offline { display: flex; }
+</style>
+</head>
+<body>
+	<div class="wrap" id="wrap">
+		<div class="title" id="heading"></div>
+		<div class="list" id="list"></div>
+		<div class="empty-list" id="emptyList"></div>
+		<div class="footer">
+			<span class="legend"><span class="l-inv">inventory</span><span class="l-box">chests</span></span>
+			<span id="status"></span>
+		</div>
+		<div class="offline" id="offline">HUD mod not running</div>
+	</div>
+<script src="jm-api.js"></script>
+<script>
+	// items: "smooth_stone:1242, white_stained_glass:418" (also "minecraft:oak_log:64",
+	// "Smooth Stone: 1242"). The number after the last colon is the target.
+	function parseItems() {
+		var raw = String(window.items === undefined ? "" : window.items);
+		var out = [];
+		raw.split(/[,;\n]/).forEach(function (part) {
+			part = part.trim();
+			if (!part) return;
+			var m = part.match(/^(.*?)[\s:=]*(\d+)\s*$/);
+			var name = (m ? m[1] : part).trim().toLowerCase().replace(/[\s-]+/g, "_").replace(/:$/, "");
+			if (!name) return;
+			var id = name.indexOf(":") >= 0 ? name : "minecraft:" + name;
+			out.push({ id: id, need: m ? parseInt(m[2], 10) : 0 });
+		});
+		return out;
+	}
+
+	function flag(name, fallback) {
+		var v = window[name];
+		if (v === undefined || v === "") return fallback;
+		v = String(v).trim().toLowerCase();
+		return v !== "0" && v !== "false" && v !== "no";
+	}
+
+	document.getElementById("heading").textContent = window.title === undefined ? "Materials" : String(window.title);
+
+	var wanted = parseItems();
+	var rows = {};
+
+	function makeRow(item) {
+		var row = document.createElement("div");
+		row.className = "row";
+		row.innerHTML =
+			'<div class="icon"></div>'
+			+ '<div class="name">' + JM.itemLabel(item.id) + '</div>'
+			+ '<div class="count"><span class="have">0</span><span class="need">/' + item.need + '</span></div>'
+			+ '<div class="bar"><div class="inv"></div><div class="box"></div></div>';
+		var icon = row.querySelector(".icon");
+		var img = document.createElement("img");
+		img.alt = "";
+		img.onerror = function () { icon.textContent = JM.itemLabel(item.id).charAt(0); };
+		img.src = JM.iconUrl(item.id);
+		icon.appendChild(img);
+		return { el: row, have: row.querySelector(".have"), inv: row.querySelector(".inv"), box: row.querySelector(".box"), remaining: item.need };
+	}
+
+	function render(state) {
+		var list = document.getElementById("list");
+		var totals = state.totals || {};
+		wanted.forEach(function (item) {
+			var r = rows[item.id] || (rows[item.id] = makeRow(item));
+			var t = totals[item.id] || { inventory: 0, containers: 0 };
+			var have = t.inventory + t.containers;
+			var done = item.need > 0 && have >= item.need;
+			r.have.textContent = have;
+			r.el.classList.toggle("done", done);
+			var scale = item.need > 0 ? 100 / item.need : 0;
+			var invPct = Math.min(100, t.inventory * scale);
+			var boxPct = Math.min(100 - invPct, t.containers * scale);
+			r.inv.style.width = invPct + "%";
+			r.box.style.width = boxPct + "%";
+			r.remaining = Math.max(0, item.need - have);
+			r.hidden = done && flag("hideDone", false);
+		});
+
+		var order = wanted.slice();
+		if (String(window.sort || "list").toLowerCase() === "remaining") {
+			order.sort(function (a, b) { return rows[b.id].remaining - rows[a.id].remaining; });
+		}
+		// Re-append in order; the browser moves existing nodes, so icons are not reloaded.
+		order.forEach(function (item) {
+			var r = rows[item.id];
+			r.el.style.display = r.hidden ? "none" : "";
+			list.appendChild(r.el);
+		});
+
+		var status = document.getElementById("status");
+		var n = (state.containers || []).length;
+		var open = state.openContainer;
+		var trackKeyName = (state.keys && state.keys.trackContainer) || "K";
+		if (open && open.known && !open.tracked) {
+			status.innerHTML = '<span class="hint">press ' + trackKeyName + ' to count this chest</span>';
+		} else if (open && open.known && open.tracked) {
+			status.textContent = "chest counted";
+		} else {
+			status.textContent = n + (n === 1 ? " chest tracked" : " chests tracked");
+		}
+	}
+
+	function setOffline(text) {
+		var wrap = document.getElementById("wrap");
+		wrap.classList.toggle("offline-mode", !!text);
+		if (text) document.getElementById("offline").textContent = text;
+	}
+
+	function poll() {
+		JM.fetchState()
+			.then(function (state) {
+				if (!state.inGame) { setOffline("Not in a world"); return; }
+				setOffline(null);
+				render(state);
+			})
+			.catch(function () { setOffline("HUD mod not running"); });
+	}
+
+	if (!wanted.length) {
+		document.getElementById("emptyList").textContent = 'No materials set. In config.js give this panel params: { items: "smooth_stone:1242, white_stained_glass:418" }';
+	}
+	setOffline("HUD mod not running");
+	poll();
+	setInterval(poll, 1000);
+</script>
+</body>
+</html>

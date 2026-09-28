@@ -186,9 +186,37 @@ var JM = (function () {
 		return d > 180 ? d - 360 : d;
 	}
 
+	// ---- iCUE HUD Bridge mod (mod/ in this repo): inventory, equipment, tracked chests ----
+	function modApiBase() {
+		var base = (window.modApiBase && window.modApiBase.length) ? window.modApiBase : "http://localhost:27421";
+		return base.replace(/\/+$/, "");
+	}
+
+	// Resolves to the mod's /state snapshot: { inGame, player, inventory[], equipment{}, containers[], openContainer, totals{} }.
+	function fetchState() {
+		return fetch(modApiBase() + "/state", { cache: "no-store" }).then(function (r) {
+			if (!r.ok) throw new Error("HTTP " + r.status);
+			return r.json();
+		});
+	}
+
+	function iconUrl(itemId) {
+		return modApiBase() + "/icon?id=" + encodeURIComponent(itemId);
+	}
+
+	// "minecraft:white_stained_glass" -> "White Stained Glass"
+	function itemLabel(itemId) {
+		var name = String(itemId || "").replace(/^[^:]*:/, "").replace(/_/g, " ");
+		return name.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+	}
+
 	return {
 		apiBase: apiBase,
 		getJson: getJson,
+		modApiBase: modApiBase,
+		fetchState: fetchState,
+		iconUrl: iconUrl,
+		itemLabel: itemLabel,
 		fetchPlayer: fetchPlayer,
 		fetchWorld: fetchWorld,
 		fetchWaypoints: fetchWaypoints,

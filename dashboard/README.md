@@ -66,6 +66,7 @@ somewhere"), but explicit placement is easier to reason about.
 | `background`      | color   | `"#000"`                | screen background |
 | `panelBackground` | color   | `"#101014"`             | panel background; also what shows while a widget loads |
 | `apiBase`         | URL     | `"http://localhost:8080"` | JourneyMap webmap address, passed to every widget |
+| `modApiBase`      | URL     | `"http://localhost:27421"` | iCUE HUD Bridge mod address (`armor`, `materials`), passed to every widget |
 | `watchConfig`     | boolean | `true`                  | re-read `config.js` while running |
 | `watchInterval`   | ms      | 3000                    | how often to re-read it (500 minimum) |
 | `panels`          | array   | required                | the panels, see below |
@@ -76,7 +77,7 @@ somewhere"), but explicit placement is easier to reason about.
 
 | key          | type    | default | meaning |
 |--------------|---------|---------|---------|
-| `widget`     | string  |         | folder name under `widgets/` (`map`, `coords`, `coords-tap`, `clock`, `waypoints`, `environment`), or `empty` for a blank panel |
+| `widget`     | string  |         | folder name under `widgets/` (`map`, `coords`, `coords-tap`, `clock`, `waypoints`, `environment`, `armor`, `materials`), or `empty` for a blank panel |
 | `url`        | string  |         | instead of `widget`: any page to show in the panel (`file:///…`, `https://…`) |
 | `col`, `row` | 1..     | auto    | top-left cell; give both or neither |
 | `colSpan`    | 1..     | 1       | width in cells |
@@ -89,9 +90,10 @@ at different zooms, for example).
 
 ## Widgets
 
-All widgets read the JourneyMap webmap API at `apiBase`, show "Minecraft not
+Most widgets read the JourneyMap webmap API at `apiBase`, show "Minecraft not
 running" when it is unreachable, and take `apiBase` as a parameter if one
-panel needs a different address.
+panel needs a different address. `armor` and `materials` instead read the
+repo's own client mod at `modApiBase` (see [Mod-backed widgets](#mod-backed-widgets)).
 
 ### `map` — live map
 
@@ -138,7 +140,17 @@ X / Y / Z, dimension and facing, twice a second. No parameters.
 
 Blank until tapped; each tap stores your position at that moment with the
 time. Use it to pin a portal, a hole you fell into, or where you left the
-boat. No parameters.
+boat. With the iCUE HUD Bridge mod installed, pressing **H** in game does the
+same without reaching for the screen (the action bar echoes the captured
+position), and the last capture survives a dashboard reload.
+
+| param    | values     | default | meaning |
+|----------|------------|---------|---------|
+| `hotkey` | `1`, `0`   | `1`     | listen for the in-game key (needs the mod; taps always work) |
+
+The key is ignored while a menu or chat is open. To use another key, edit
+`capture=H` in `.minecraft\config\icuehud\keys.properties` (see
+[Hotkeys](#hotkeys)).
 
 ### `clock` — day/night clock
 
@@ -175,6 +187,86 @@ The biome you stand in, tags for dimension / underground / sneaking, the
 coordinates a Nether portal built here would link to (÷ 8 in the Overworld,
 × 8 in the Nether, nothing in the End), and your chunk, position within the
 chunk and region. No parameters.
+
+## Mod-backed widgets
+
+JourneyMap knows nothing about your inventory, so these two widgets read the
+**iCUE HUD Bridge** mod in `mod/` (build and install it with
+`scripts\build-mod.ps1`; it serves `http://localhost:27421/state`). Without
+the mod they show "HUD mod not running"; outside a world, "Not in a world".
+
+### `armor` — equipment durability
+
+One row per slot: the item's picture, its name, remaining durability as a
+bar and as `left/max`. Bar colors: green 50–100 %, yellow 25–49 %, orange
+10–24 %, red 1–9 % (pulsing). An empty slot shows a red ✕. Items without
+durability (a carved pumpkin, a totem in the off hand) get a grey bar.
+
+| param       | values                                          | default                 | meaning |
+|-------------|-------------------------------------------------|-------------------------|---------|
+| `slots`     | list from `head, chest, legs, feet, mainhand, offhand` | `head,chest,legs,feet` | rows to show, in this order; add `mainhand` to watch the tool you hold |
+| `showNames` | `true`, `false`                                 | `true`                  | item name next to the slot label |
+
+### `materials` — build project progress
+
+A list of materials with `have/need` for each, where *have* counts your
+inventory (blue part of the bar) plus everything in the chests the mod
+tracks (green). A line turns green with a ✓ once you have enough.
+
+```js
+{ widget: "materials", col: 11, row: 5, colSpan: 3, rowSpan: 5, params: {
+    items: "smooth_stone:1242, white_stained_glass:418"
+} },
+```
+
+`items` is `name:amount` pairs separated by commas. Names are Minecraft item
+ids without the `minecraft:` prefix (`smooth_stone`, `white_stained_glass`,
+`oak_log`; spaces instead of underscores also work). Edit and save to change
+the list or the targets; the running dashboard picks it up.
+
+**Which chests count.** Only storage you placed yourself: chests, trapped
+chests, barrels and shulker boxes. The mod notices when you place one and
+tracks it from then on; breaking it forgets it. A chest you *find* (a
+mineshaft, a village) is ignored, but you can claim any chest by pressing
+**K** while it is open (the action bar says whether it is counted; K again
+un-claims). Use that once for storage you built before installing the mod.
+A double chest is one entry, counted once.
+
+**How counting stays right.** The game only tells your client what is in a
+chest while it is open, so the mod records a chest's contents every time you
+open it and remembers them per world in `.minecraft\config\icuehud\`. Taking
+items out or putting them in updates both the chest and inventory sides at
+once, so nothing is counted twice or dropped. What it *cannot* see is a chest
+changed while closed (a hopper feeding it, another player); that shows up the
+next time you open it.
+
+| param      | values                | default     | meaning |
+|------------|-----------------------|-------------|---------|
+| `items`    | `name:amount, …`      |             | the list; without it the panel says how to set it |
+| `title`    | text                  | `Materials` | heading; `""` for none |
+| `hideDone` | `true`, `false`       | `false`     | hide items once you have enough |
+| `sort`     | `list`, `remaining`   | `list`      | as written, or most-missing first |
+
+The footer shows how many chests are tracked, or, while a chest is open,
+whether it is counted (with the key hint if not).
+
+### Hotkeys
+
+The mod's two keys are set in `.minecraft\config\icuehud\keys.properties`,
+which the mod creates on its first launch:
+
+```properties
+capture=H          # stamp your position onto the coords-tap panel
+trackContainer=K   # while a chest is open: count it for materials (again to un-count)
+```
+
+Names are Minecraft's own: `A`–`Z`, `0`–`9`, `F1`–`F24`, `NUMPAD0`–`NUMPAD9`,
+`HOME`, `END`, `INSERT`, `PAGEUP`, `PAGEDOWN`, `LBRACKET`, `RBRACKET`,
+`SEMICOLON`, `APOSTROPHE`, `GRAVE`, `MINUS`, `EQUALS`, `BACKSLASH`, and so on.
+Save the file and the change applies within about five seconds, no restart.
+An unknown name is reported in the game log and the previous key stays.
+Pick keys that neither Minecraft nor your other mods use (JourneyMap takes
+J, B, N, M, `[`, `]`, `\`; Iris uses K on its own screens only).
 
 ### `empty`
 
@@ -288,9 +380,15 @@ panels: [
 - **Only what JourneyMap knows.** The webmap API exposes position, heading,
   biome, underground/sneaking flags, world time and name, waypoints, and the
   radar lists (mobs, animals, villagers, other players in render distance).
-  It does *not* expose health, hunger, XP, inventory, armor, held item,
-  effects, weather, light level or server TPS. Those would need a client mod
-  again (the retired one in `attic/` did inventory).
+  It does *not* expose health, hunger, XP, effects, weather, light level or
+  server TPS. Inventory, equipment durability and chest contents come from
+  the repo's own mod (`mod/`), which is version-pinned: rebuild it with
+  `scripts\build-mod.ps1` after a Minecraft update (bump the versions in
+  `mod/gradle.properties` and `mod/src/main/resources/fabric.mod.json`).
+- **Chest tracking is client-side.** The `materials` widget sees a tracked
+  chest's contents as of the last time you opened it, and tracks only chests
+  you placed (or claimed with **K**). Ender chests, hoppers, furnaces and
+  minecart chests are not tracked.
 - **Waypoints are JourneyMap's.** Vanilla has none. Death points appear when
   JourneyMap's "create death waypoint" option is on (default); they are
   recognized by JourneyMap 5's `type`, or in JourneyMap 6 by a group, icon
@@ -340,5 +438,13 @@ panels: [
   browser; see the main README's troubleshooting section for the port pin.
 - **A panel is blank** — the widget folder name is wrong, or a `url` page
   refuses to be framed.
+- **"HUD mod not running" in the armor / materials panels** — the mod is not
+  installed for the running Minecraft version, or listens on another port.
+  `http://localhost:27421/state` should answer in a world; the game log
+  (`.minecraft\logs\latest.log`) has a `[icuehud]` line when it loaded.
+  Rebuild with `scripts\build-mod.ps1` after a Minecraft update.
+- **An item shows a letter instead of a picture** — the mod serves the item's
+  flat texture; blocks with only a 3D model (chests, stairs, doors) have none.
+  Counting still works.
 - **Layout did not update** — `watchConfig` is `false`, or the file still
   has an error (banner). `scripts\start-dashboard.ps1 -Restart` always works.

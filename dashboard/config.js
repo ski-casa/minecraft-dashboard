@@ -16,6 +16,7 @@ window.HUD_CONFIG = {
 	background: "#000",                   // screen background
 	panelBackground: "#101014",           // panel background (also shown while a widget loads)
 	apiBase: "http://localhost:8080",     // JourneyMap webmap URL, passed to every widget
+	modApiBase: "http://localhost:27421", // iCUE HUD Bridge mod URL (armor + materials widgets)
 	watchConfig: true,                    // re-read this file every few seconds and apply changes
 
 	panels: [
@@ -25,8 +26,9 @@ window.HUD_CONFIG = {
 		{ widget: "coords-tap", col: 1, row: 7, colSpan: 3, rowSpan: 3 },
 
 		// CENTER MAP
-		{ widget: "map", col: 4, row: 1, colSpan: 10, rowSpan: 9, params: {
-			zoomLevel: 1 ,        // starting zoom: -2 (far) ... 5 (close)
+		{ widget: "map", col: 4, row: 1, colSpan: 7, rowSpan: 9, params: {
+			zoomLevel: -2
+			 ,        // starting zoom: -2 (far) ... 5 (close)
 			zoomButtons: true,   // on-screen + / - buttons (pinch also zooms)
 			zoomReset: 0,        // seconds after a manual zoom before it returns to zoomLevel (0 = never)
 			mapMode: "auto",     // "auto", "day", "night" or "topo"
@@ -40,8 +42,20 @@ window.HUD_CONFIG = {
 			labels: "all"        // name labels: "all", "players", "waypoints" or "none"
 		} },
 
+		// GEAR + BUILD PROJECT (need the iCUE HUD Bridge mod: scripts\build-mod.ps1)
+		{ widget: "armor", col: 11, row: 1, colSpan: 3, rowSpan: 4, params: {
+			slots: "head,chest,legs,feet,offhand",   // also: mainhand (the tool you hold)
+			showNames: true
+		} },
+		{ widget: "materials", col: 11, row: 5, colSpan: 3, rowSpan: 5, params: {
+			items: "stone:1242, white_stained_glass:418",   // "item:amount, item:amount, ..."
+			title: "Materials",
+			hideDone: false,     // hide items once you have enough
+			sort: "list"         // "list" (as written) or "remaining" (most missing first)
+		} },
+
 		// RIGHT WIDGETS
-		{ widget: "waypoints", col: 14, row: 1, colSpan: 3, rowSpan: 5 },
-		{ widget: "environment", col: 14, row: 6, colSpan: 3, rowSpan: 4 }
+		{ widget: "waypoints", col: 14, row: 1, colSpan: 3, rowSpan: 3 },
+		{ widget: "environment", col: 14, row: 6, colSpan: 3, rowSpan: 3 }
 	]
 };

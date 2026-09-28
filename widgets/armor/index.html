@@ -1,0 +1,242 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="modApiBase" data-label="iCUE HUD Bridge mod URL" data-type="textfield" data-default="http://localhost:27421" />
+<meta name="x-icue-property" data-name="slots" data-label="Slots to show (head, chest, legs, feet, mainhand, offhand)" data-type="textfield" data-default="head,chest,legs,feet" />
+<meta name="x-icue-property" data-name="showNames" data-label="Show item names (1 or 0)" data-type="textfield" data-default="1" />
+<style>
+	/* Sized from the panel's smaller side so the widget scales to any grid cell. */
+	html { font-size: 4.4vmin; }
+	html, body {
+		margin: 0;
+		padding: 0;
+		width: 100%;
+		height: 100%;
+		background: #101014;
+		color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+	}
+	.wrap {
+		box-sizing: border-box;
+		width: 100%;
+		height: 100%;
+		padding: 5% 7%;
+	}
+	.rows {
+		display: grid;
+		height: 100%;
+		grid-auto-rows: 1fr;
+		gap: 3%;
+	}
+	.row {
+		display: grid;
+		grid-template-columns: auto 1fr auto;
+		grid-template-rows: auto auto;
+		column-gap: 0.6em;
+		align-items: center;
+		min-height: 0;
+	}
+	.icon {
+		grid-row: 1 / span 2;
+		width: 2.4em;
+		height: 2.4em;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 0.3em;
+		background: rgba(255, 255, 255, 0.05);
+	}
+	.icon img {
+		width: 2em;
+		height: 2em;
+		image-rendering: pixelated;
+	}
+	.icon .glyph { font-size: 1.6em; opacity: 0.5; }
+	.icon.empty .glyph { color: #ff453a; opacity: 1; font-weight: 700; }
+	.label {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5em;
+		min-width: 0;
+	}
+	.slot {
+		font-size: 1.1em;
+		font-weight: 600;
+		opacity: 0.6;
+		letter-spacing: 0.05em;
+	}
+	.name {
+		font-size: 1em;
+		opacity: 0.85;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.wrap.no-names .name { display: none; }
+	.value {
+		font-family: "Consolas", "Cascadia Mono", monospace;
+		font-size: 1.15em;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		text-align: right;
+	}
+	.bar {
+		grid-column: 2 / span 2;
+		height: 0.7em;
+		border-radius: 0.35em;
+		background: rgba(255, 255, 255, 0.1);
+		overflow: hidden;
+	}
+	.bar > div {
+		height: 100%;
+		width: 0;
+		border-radius: 0.35em;
+		transition: width 0.3s ease-out, background-color 0.3s;
+	}
+	.t-green  { background: #34c759; color: #34c759; }
+	.t-yellow { background: #ffd60a; color: #ffd60a; }
+	.t-orange { background: #ff9f0a; color: #ff9f0a; }
+	.t-red    { background: #ff453a; color: #ff453a; }
+	.t-none   { background: rgba(255, 255, 255, 0.35); color: rgba(255, 255, 255, 0.5); }
+	.value.t-green, .value.t-yellow, .value.t-orange, .value.t-red, .value.t-none { background: none; }
+	.row.low .bar > div { animation: pulse 1s ease-in-out infinite alternate; }
+	@keyframes pulse { from { opacity: 1; } to { opacity: 0.45; } }
+	.offline {
+		display: none;
+		height: 100%;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		font-size: 1.3em;
+		opacity: 0.6;
+	}
+	.wrap.offline-mode .rows { display: none; }
+	.wrap.offline-mode .offline { display: flex; }
+</style>
+</head>
+<body>
+	<div class="wrap" id="wrap">
+		<div class="rows" id="rows"></div>
+		<div class="offline" id="offline">HUD mod not running</div>
+	</div>
+<script src="jm-api.js"></script>
+<script>
+	var SLOT_LABEL = { head: "Helm", chest: "Chest", legs: "Legs", feet: "Boots", mainhand: "Hand", offhand: "Off" };
+	var SLOT_GLYPH = { head: "⛑", chest: "🛡", legs: "👖", feet: "👢", mainhand: "⚒", offhand: "✋" };
+
+	function configuredSlots() {
+		var v = String(window.slots === undefined ? "head,chest,legs,feet" : window.slots).toLowerCase();
+		var list = v.split(",").map(function (s) { return s.trim(); }).filter(function (s) { return SLOT_LABEL[s]; });
+		return list.length ? list : ["head", "chest", "legs", "feet"];
+	}
+	var names = String(window.showNames === undefined ? "1" : window.showNames).toLowerCase();
+	document.getElementById("wrap").classList.toggle("no-names", names === "0" || names === "false" || names === "no");
+
+	// Durability tiers: green 50-100%, yellow 25-49%, orange 10-24%, red 1-9%.
+	function tier(pct) {
+		if (pct >= 50) return "t-green";
+		if (pct >= 25) return "t-yellow";
+		if (pct >= 10) return "t-orange";
+		return "t-red";
+	}
+
+	var rows = {};
+	function buildRows() {
+		var host = document.getElementById("rows");
+		host.innerHTML = "";
+		configuredSlots().forEach(function (slot) {
+			var row = document.createElement("div");
+			row.className = "row";
+			row.innerHTML =
+				'<div class="icon"><span class="glyph"></span></div>'
+				+ '<div class="label"><span class="slot">' + SLOT_LABEL[slot] + '</span><span class="name"></span></div>'
+				+ '<div class="value"></div>'
+				+ '<div class="bar"><div></div></div>';
+			host.appendChild(row);
+			rows[slot] = {
+				el: row,
+				icon: row.querySelector(".icon"),
+				glyph: row.querySelector(".glyph"),
+				name: row.querySelector(".name"),
+				value: row.querySelector(".value"),
+				fill: row.querySelector(".bar > div"),
+				itemId: null
+			};
+		});
+	}
+
+	function setIcon(r, itemId, slot) {
+		if (r.itemId === itemId) return;
+		r.itemId = itemId;
+		r.icon.innerHTML = "";
+		r.icon.classList.toggle("empty", !itemId);
+		if (!itemId) {
+			r.icon.innerHTML = '<span class="glyph">✕</span>';
+			return;
+		}
+		var img = document.createElement("img");
+		img.alt = "";
+		img.onerror = function () { r.icon.innerHTML = '<span class="glyph">' + SLOT_GLYPH[slot] + '</span>'; };
+		img.src = JM.iconUrl(itemId);
+		r.icon.appendChild(img);
+	}
+
+	function render(state) {
+		configuredSlots().forEach(function (slot) {
+			var r = rows[slot];
+			var item = state.equipment ? state.equipment[slot] : null;
+			r.el.classList.remove("low");
+			if (!item) {
+				setIcon(r, null, slot);
+				r.name.textContent = "empty";
+				r.value.textContent = "—";
+				r.value.className = "value t-red";
+				r.fill.style.width = "0%";
+				r.fill.className = "t-red";
+				return;
+			}
+			setIcon(r, item.id, slot);
+			r.name.textContent = item.name;
+			if (typeof item.maxDamage !== "number" || item.maxDamage <= 0) {
+				r.value.textContent = "—";
+				r.value.className = "value t-none";
+				r.fill.style.width = "100%";
+				r.fill.className = "t-none";
+				return;
+			}
+			var left = item.maxDamage - item.damage;
+			var pct = Math.max(0, Math.min(100, left / item.maxDamage * 100));
+			var t = tier(pct);
+			r.value.textContent = left + "/" + item.maxDamage;
+			r.value.className = "value " + t;
+			r.fill.style.width = Math.max(pct, 1.5) + "%";
+			r.fill.className = t;
+			if (t === "t-red") r.el.classList.add("low");
+		});
+	}
+
+	function setOffline(text) {
+		var wrap = document.getElementById("wrap");
+		wrap.classList.toggle("offline-mode", !!text);
+		if (text) document.getElementById("offline").textContent = text;
+	}
+
+	function poll() {
+		JM.fetchState()
+			.then(function (state) {
+				if (!state.inGame) { setOffline("Not in a world"); return; }
+				setOffline(null);
+				render(state);
+			})
+			.catch(function () { setOffline("HUD mod not running"); });
+	}
+
+	buildRows();
+	setOffline("HUD mod not running");
+	poll();
+	setInterval(poll, 500);
+</script>
+</body>
+</html>

@@ -31,8 +31,9 @@ a 16 × 9 grid with the map in the middle and three panels down each side:
   Auto mode shows the night layer after dark and the cave layer underground (always
   in the Nether). Zoom, mode and layers are parameters.
 - **MC Coordinates** (`widgets/coords`) — X/Y/Z, dimension, facing; updates twice a second.
-- **MC Coordinates (tap)** (`widgets/coords-tap`) — updates **only when tapped**;
-  shows the capture time. Use it to pin a spot (portal, base, drop chest) while you keep moving.
+- **MC Coordinates (tap)** (`widgets/coords-tap`) — updates **only when tapped** (or
+  when you press **H** in game, with the mod below); shows the capture time. Use it to
+  pin a spot (portal, base, drop chest) while you keep moving.
 - **MC Day/Night Clock** (`widgets/clock`) — in-game time with the sun/moon on an arc,
   countdown to nightfall or dawn, and when the bed works.
 - **MC Waypoints** (`widgets/waypoints`) — your JourneyMap waypoints by distance, with
@@ -40,6 +41,16 @@ a 16 × 9 grid with the map in the middle and three panels down each side:
   tap a row to keep it on top.
 - **MC Environment** (`widgets/environment`) — biome, the Nether/Overworld portal
   coordinates for where you stand, chunk and region.
+- **MC Armor** (`widgets/armor`) — durability bars for your helmet, chestplate,
+  leggings and boots (optionally the held item too): green → yellow → orange → red,
+  a red ✕ for an empty slot. Needs the mod below.
+- **MC Materials** (`widgets/materials`) — a build's shopping list (`smooth_stone:1242, …`
+  in the config) with `have/need` per item, counting your inventory plus the chests
+  you placed. Needs the mod below.
+
+The last two read the **iCUE HUD Bridge** mod in `mod/`, a small client-side Fabric
+mod that serves your inventory, equipment and tracked chest contents on
+`http://localhost:27421`. JourneyMap has no view of any of that.
 
 Change the grid, move panels, add a second map or a web page: edit
 `dashboard/config.js` and the running dashboard picks it up within seconds.
@@ -54,10 +65,30 @@ All the options, examples and limitations are in [dashboard/README.md](dashboard
 ```
 
 Detects your newest Fabric profile, installs the matching **JourneyMap**,
-**JourneyMap WebMap** and a **borderless fullscreen** mod (Cubes Without
-Borders, or Borderless Mining on older versions) from Modrinth, sets
+**JourneyMap WebMap** and a **borderless fullscreen** mod (Borderless Fullscreen,
+or Cubes Without Borders on 26.2 and older) from Modrinth, sets
 `pauseOnLostFocus:false`, and pins the webmap to port 8080 (the port pin needs
-one game launch first — run the script again after that).
+one game launch first — run the script again after that). It also installs the
+repo's own mod if it has been built (next step).
+
+### 1b. The iCUE HUD Bridge mod (for the armor and materials widgets)
+
+```powershell
+.\scripts\build-mod.ps1
+```
+
+Builds `mod/` with Gradle and copies the jar into the mods folder. Fabric's
+build tooling needs a JDK 25; if none is found the script downloads one into
+`tools\` (gitignored). The first build takes a few minutes. The mod is pinned
+to a Minecraft version: after a game update, set the new versions in
+`mod/gradle.properties` (from [fabricmc.net/develop](https://fabricmc.net/develop))
+and `mod/src/main/resources/fabric.mod.json`, then build again.
+
+In game the mod adds two keys: **K** while a chest is open counts (or
+un-counts) it for the materials widget, and **H** stamps your position onto
+the coords-tap panel (see [dashboard/README.md](dashboard/README.md#mod-backed-widgets)).
+Both can be changed in `.minecraft\config\icuehud\keys.properties` (created on
+first launch; edits apply while the game runs).
 
 Prereq: the [Fabric loader](https://fabricmc.net/use/installer/) profile for
 your Minecraft version. That's the only thing this project needs per-version —
@@ -149,13 +180,21 @@ game is closed.
   Fullscreen, not vanilla fullscreen.
 - **New Minecraft version, no JourneyMap build yet** — the installer says so
   explicitly. Play the older version until JourneyMap updates (usually days).
+- **Armor / materials panels say "HUD mod not running"** — the mod jar in the
+  mods folder does not match the game version (the game refuses it at launch
+  and says so), or it was never built. `scripts\build-mod.ps1`, then check
+  `http://localhost:27421/state` in a world.
 
 ## Repo layout
 
 - `widgets/` — the HUD panels (plain HTML; also packageable as iCUE widgets) and
   the canonical `jm-api.js`
 - `dashboard/` — kiosk page, its `config.js` layout, and the configuration README
-- `scripts/` — installer, packager, `jm-api.js` sync, focus guard, task registration,
-  dashboard launcher
-- `attic/` — retired first iteration: custom Fabric mod (`icuehud`, version-pinned
-  HTTP server) + inventory widget that read from it. Superseded by JourneyMap.
+- `mod/` — the iCUE HUD Bridge Fabric mod (inventory, equipment durability,
+  tracked chests → `localhost:27421`); `scripts\build-mod.ps1` builds and installs it
+- `scripts/` — installer, mod build, packager, `jm-api.js` sync, focus guard,
+  task registration, dashboard launcher
+- `tools/` — the mock JourneyMap server for widget development; also where
+  `build-mod.ps1` keeps its downloaded JDK
+- `attic/` — retired first iteration (the 26.2 mod that `mod/` grew out of, and an
+  inventory widget). Kept for reference only; safe to delete.
