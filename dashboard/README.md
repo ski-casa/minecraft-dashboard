@@ -88,6 +88,10 @@ somewhere"), but explicit placement is easier to reason about.
 The same widget can appear more than once with different `params` (two maps
 at different zooms, for example).
 
+Every widget except the map sizes its text from the panel's smaller side, so
+a wide, short panel gets small text. `params: { fontScale: 1.3 }` makes any
+widget's text (and pictures) 30 % larger; `0.8` smaller.
+
 ## Widgets
 
 Most widgets read the JourneyMap webmap API at `apiBase`, show "Minecraft not
@@ -206,6 +210,7 @@ durability (a carved pumpkin, a totem in the off hand) get a grey bar.
 |-------------|-------------------------------------------------|-------------------------|---------|
 | `slots`     | list from `head, chest, legs, feet, mainhand, offhand` | `head,chest,legs,feet` | rows to show, in this order; add `mainhand` to watch the tool you hold |
 | `showNames` | `true`, `false`                                 | `true`                  | item name next to the slot label |
+| `title`     | text                                            | `Durability`            | heading; `""` for none |
 
 ### `materials` — build project progress
 
@@ -234,7 +239,9 @@ A double chest is one entry, counted once.
 
 **How counting stays right.** The game only tells your client what is in a
 chest while it is open, so the mod records a chest's contents every time you
-open it and remembers them per world in `.minecraft\config\icuehud\`. Taking
+open it and remembers them per world in `.minecraft\config\icuehud\`
+(`containers-sp_<world name>.json`, `containers-realm_<realm name>.json` or
+`containers-mp_<address>.json`), so they survive closing the game. Taking
 items out or putting them in updates both the chest and inventory sides at
 once, so nothing is counted twice or dropped. What it *cannot* see is a chest
 changed while closed (a hopper feeding it, another player); that shows up the
@@ -443,8 +450,12 @@ panels: [
   `http://localhost:27421/state` should answer in a world; the game log
   (`.minecraft\logs\latest.log`) has a `[icuehud]` line when it loaded.
   Rebuild with `scripts\build-mod.ps1` after a Minecraft update.
-- **An item shows a letter instead of a picture** — the mod serves the item's
-  flat texture; blocks with only a 3D model (chests, stairs, doors) have none.
-  Counting still works.
+- **An item shows a letter instead of a picture** — pictures come from the
+  mod: the item's own sprite from the game files, or for 3D blocks (stairs,
+  chests, …) the inventory sprite from the Minecraft Wiki, fetched once and
+  kept in `.minecraft\config\icuehud\icons\`. With no internet on the first
+  look-up the block's material texture stands in; with nothing at all, a
+  letter. The widgets retry every 20 s, so a letter also clears by itself once
+  the mod is up. Counting is unaffected.
 - **Layout did not update** — `watchConfig` is `false`, or the file still
   has an error (banner). `scripts\start-dashboard.ps1 -Restart` always works.

@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="x-icue-property" data-name="apiBase" data-label="JourneyMap webmap URL" data-type="textfield" data-default="http://localhost:8080" />
+<meta name="x-icue-property" data-name="fontScale" data-label="Text size multiplier (1 = default)" data-type="textfield" data-default="1" />
 <meta name="x-icue-property" data-name="hourFormat" data-label="Clock format (24 or 12)" data-type="textfield" data-default="24" />
 <style>
 	/* Sized from the panel's smaller side so the widget scales to any grid cell. */
@@ -131,6 +132,7 @@
 	</div>
 	<div class="offline">Minecraft not running</div>
 <script src="jm-api.js"></script>
+<script>JM.applyFontScale(4.4);</script>
 <script>
 	// A Minecraft day is 24000 ticks at 20 ticks/s (20 real minutes); tick 0 = 06:00.
 	// 0-12000 sun up, 12000-13000 dusk, 13000-23000 night, 23000-24000 dawn.

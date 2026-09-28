@@ -65,8 +65,8 @@ public class IcueHudClient implements ClientModInitializer {
 		if (++tick % 100 == 0) keys.refresh();   // pick up edits to keys.properties every 5 s
 		tracker.tick(client, player);
 
-		// Capture key: only while the mouse is grabbed, i.e. no screen or chat is open.
-		boolean captureDown = client.mouseHandler.isMouseGrabbed()
+		// Capture key: only while no screen (menu, chat, chest) is open, so typing never triggers it.
+		boolean captureDown = client.gui.screen() == null
 				&& com.mojang.blaze3d.platform.InputConstants.isKeyDown(keys.captureKey());
 		if (captureDown && !captureKeyWasDown) {
 			JsonObject c = new JsonObject();

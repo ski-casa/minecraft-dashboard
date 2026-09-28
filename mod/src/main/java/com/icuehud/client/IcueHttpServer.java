@@ -83,26 +83,97 @@ public class IcueHttpServer {
 		}
 	}
 
-	/** Item sprite if there is one, else the block's face; 3D-only models (chests, stairs...) have neither. */
+	// Shapes that only exist as 3D models; their icon is the material they are made of.
+	private static final String[] SHAPE_SUFFIXES = {
+			"_stairs", "_slab", "_wall", "_fence_gate", "_fence", "_button", "_pressure_plate", "_trapdoor", "_pane"
+	};
+
+	/**
+	 * Icon lookup, in order: the item's own flat sprite from the game files; the
+	 * Minecraft Wiki's inventory sprite (a proper render for 3D blocks such as
+	 * stairs and chests, fetched once and cached under config/icuehud/icons);
+	 * the block's face; the face of the material a stair/slab/wall is cut from.
+	 */
 	private static byte[] loadIcon(Identifier item) {
 		String ns = item.getNamespace(), name = item.getPath();
-		String[] candidates = {
-				"textures/item/" + name + ".png",
-				"textures/block/" + name + ".png",
-				"textures/block/" + name + "_top.png",
-				"textures/block/" + name + "_side.png",
-				"textures/block/" + name + "_front.png"
-		};
-		for (String path : candidates) {
-			Optional<Resource> res = Minecraft.getInstance().getResourceManager().getResource(Identifier.fromNamespaceAndPath(ns, path));
-			if (res.isEmpty()) continue;
-			try (InputStream in = res.get().open()) {
-				return in.readAllBytes();
-			} catch (IOException e) {
-				// try the next candidate
+		byte[] own = readResource(ns, "textures/item/" + name + ".png");
+		if (own != null) return own;
+		byte[] wiki = wikiSprite(item);
+		if (wiki != null) return wiki;
+
+		java.util.List<String> candidates = new java.util.ArrayList<>();
+		addBlockFaces(candidates, name);
+		for (String suffix : SHAPE_SUFFIXES) {
+			if (!name.endsWith(suffix)) continue;
+			String base = name.substring(0, name.length() - suffix.length());
+			// cobbled_deepslate_stairs -> cobbled_deepslate; stone_brick_stairs -> stone_bricks;
+			// oak_stairs -> oak_planks; quartz_stairs -> quartz_block(_side)
+			for (String material : new String[] { base, base + "s", base + "_planks", base + "_block" }) {
+				candidates.add("textures/item/" + material + ".png");
+				addBlockFaces(candidates, material);
 			}
+			break;
+		}
+		for (String path : candidates) {
+			byte[] png = readResource(ns, path);
+			if (png != null) return png;
 		}
 		return NO_ICON;
+	}
+
+	private static byte[] readResource(String ns, String path) {
+		Optional<Resource> res = Minecraft.getInstance().getResourceManager().getResource(Identifier.fromNamespaceAndPath(ns, path));
+		if (res.isEmpty()) return null;
+		try (InputStream in = res.get().open()) {
+			return in.readAllBytes();
+		} catch (IOException e) {
+			return null;
+		}
+	}
+
+	// ---- Minecraft Wiki inventory sprites ("Invicon_Cobbled_Deepslate_Stairs.png") ----
+	private static final java.nio.file.Path WIKI_CACHE =
+			net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir().resolve("icuehud").resolve("icons");
+	private static final java.net.http.HttpClient HTTP = java.net.http.HttpClient.newBuilder()
+			.connectTimeout(java.time.Duration.ofSeconds(4)).followRedirects(java.net.http.HttpClient.Redirect.NORMAL).build();
+
+	/** Cached on disk after the first fetch; null when the wiki has no such file or is unreachable. */
+	private static byte[] wikiSprite(Identifier item) {
+		if (!item.getNamespace().equals("minecraft")) return null;   // the wiki only covers vanilla
+		java.nio.file.Path cached = WIKI_CACHE.resolve(item.getPath() + ".png");
+		try {
+			if (java.nio.file.Files.exists(cached)) return java.nio.file.Files.readAllBytes(cached);
+		} catch (IOException e) {
+			// fall through to a fresh fetch
+		}
+		// cobbled_deepslate_stairs -> Cobbled_Deepslate_Stairs
+		StringBuilder title = new StringBuilder();
+		for (String word : item.getPath().split("_")) {
+			if (title.length() > 0) title.append('_');
+			title.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
+		}
+		try {
+			java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder(java.net.URI.create("https://minecraft.wiki/images/Invicon_" + title + ".png"))
+					.timeout(java.time.Duration.ofSeconds(6))
+					.header("User-Agent", "icuehud/0.2 (Xeneon Edge Minecraft dashboard; caches sprites locally)")
+					.GET().build();
+			java.net.http.HttpResponse<byte[]> res = HTTP.send(req, java.net.http.HttpResponse.BodyHandlers.ofByteArray());
+			String type = res.headers().firstValue("content-type").orElse("");
+			if (res.statusCode() != 200 || !type.startsWith("image/")) return null;
+			java.nio.file.Files.createDirectories(WIKI_CACHE);
+			java.nio.file.Files.write(cached, res.body());
+			return res.body();
+		} catch (IOException | InterruptedException | RuntimeException e) {
+			System.out.println(IcueHudClient.LOG_PREFIX + "no wiki sprite for " + item + " (" + e.getClass().getSimpleName() + ")");
+			return null;
+		}
+	}
+
+	private static void addBlockFaces(java.util.List<String> into, String name) {
+		into.add("textures/block/" + name + ".png");
+		into.add("textures/block/" + name + "_top.png");
+		into.add("textures/block/" + name + "_side.png");
+		into.add("textures/block/" + name + "_front.png");
 	}
 
 	private static void send(HttpExchange exchange, int status, String contentType, byte[] body) throws IOException {

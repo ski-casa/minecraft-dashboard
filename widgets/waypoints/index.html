@@ -3,12 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="x-icue-property" data-name="apiBase" data-label="JourneyMap webmap URL" data-type="textfield" data-default="http://localhost:8080" />
+<meta name="x-icue-property" data-name="fontScale" data-label="Text size multiplier (1 = default)" data-type="textfield" data-default="1" />
 <meta name="x-icue-property" data-name="dimensions" data-label="Show waypoints from (current, all)" data-type="textfield" data-default="current" />
 <meta name="x-icue-property" data-name="maxRows" data-label="Maximum rows" data-type="textfield" data-default="12" />
 <meta name="x-icue-property" data-name="deathFirst" data-label="Pin death points to the top (1 or 0)" data-type="textfield" data-default="1" />
 <style>
 	/* Sized from the panel's smaller side so the widget scales to any grid cell. */
-	html { font-size: 4.4vmin; }
+	html { font-size: 5.6vmin; }
 	html, body {
 		margin: 0;
 		padding: 0;
@@ -33,7 +34,7 @@
 		flex: none;
 		display: flex;
 		justify-content: space-between;
-		font-size: 0.8em;
+		font-size: 3.8vw;      /* by panel width so titles match across panels of the same width */
 		opacity: 0.55;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
@@ -136,6 +137,7 @@
 	</div>
 	<div class="offline">Minecraft not running</div>
 <script src="jm-api.js"></script>
+<script>JM.applyFontScale(5.6);</script>
 <script>
 	var waypoints = [];   // last normalized list from JourneyMap
 	var player = null;

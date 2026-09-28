@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="x-icue-property" data-name="apiBase" data-label="JourneyMap webmap URL" data-type="textfield" data-default="http://localhost:8080" />
+<meta name="x-icue-property" data-name="fontScale" data-label="Text size multiplier (1 = default)" data-type="textfield" data-default="1" />
 <style>
 	/* Sized from the panel's smaller side so the widget scales to any grid cell. */
 	html { font-size: 4.4vmin; }
@@ -70,6 +71,7 @@
 		<div class="offline" id="offline">Minecraft not running</div>
 	</div>
 <script src="jm-api.js"></script>
+<script>JM.applyFontScale(4.4);</script>
 <script>
 	function setOffline(isOffline) {
 		document.getElementById("wrap").classList.toggle("offline-mode", isOffline);

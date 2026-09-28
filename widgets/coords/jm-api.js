@@ -186,6 +186,14 @@ var JM = (function () {
 		return d > 180 ? d - 360 : d;
 	}
 
+	// Text size: widgets size everything in em from html { font-size: <base>vmin }.
+	// A fontScale parameter (params: { fontScale: 1.3 }) multiplies that base.
+	function applyFontScale(baseVmin) {
+		var scale = parseFloat(window.fontScale);
+		if (isNaN(scale) || scale <= 0) scale = 1;
+		document.documentElement.style.fontSize = (baseVmin * scale) + "vmin";
+	}
+
 	// ---- iCUE HUD Bridge mod (mod/ in this repo): inventory, equipment, tracked chests ----
 	function modApiBase() {
 		var base = (window.modApiBase && window.modApiBase.length) ? window.modApiBase : "http://localhost:27421";
@@ -213,6 +221,7 @@ var JM = (function () {
 	return {
 		apiBase: apiBase,
 		getJson: getJson,
+		applyFontScale: applyFontScale,
 		modApiBase: modApiBase,
 		fetchState: fetchState,
 		iconUrl: iconUrl,

@@ -21,12 +21,12 @@ window.HUD_CONFIG = {
 
 	panels: [
 		// LEFT WIDGETS
-		{ widget: "clock", col: 1, row: 1, colSpan: 3, rowSpan: 3, params: { hourFormat: 24 } },
-		{ widget: "coords", col: 1, row: 4, colSpan: 3, rowSpan: 3 },
-		{ widget: "coords-tap", col: 1, row: 7, colSpan: 3, rowSpan: 3 },
+		{ widget: "clock", col: 1, row: 1, colSpan: 2, rowSpan: 3, params: { hourFormat: 24 } },
+		{ widget: "coords", col: 1, row: 4, colSpan: 2, rowSpan: 3 },
+		{ widget: "coords-tap", col: 1, row: 7, colSpan: 2, rowSpan: 3 },
 
 		// CENTER MAP
-		{ widget: "map", col: 4, row: 1, colSpan: 7, rowSpan: 9, params: {
+		{ widget: "map", col: 3, row: 1, colSpan: 8, rowSpan: 9, params: {
 			zoomLevel: -2
 			 ,        // starting zoom: -2 (far) ... 5 (close)
 			zoomButtons: true,   // on-screen + / - buttons (pinch also zooms)
@@ -48,7 +48,13 @@ window.HUD_CONFIG = {
 			showNames: true
 		} },
 		{ widget: "materials", col: 11, row: 5, colSpan: 3, rowSpan: 5, params: {
-			items: "stone:1242, white_stained_glass:418",   // "item:amount, item:amount, ..."
+			// "item:amount, item:amount, ..."
+			items: "stone:1242, \
+			        cobbled_deepslate:254, \
+			        cobbled_deepslate_stairs:254, \
+			        white_stained_glass:418, \
+			        iron:200, \
+					diamond:40",
 			title: "Materials",
 			hideDone: false,     // hide items once you have enough
 			sort: "list"         // "list" (as written) or "remaining" (most missing first)

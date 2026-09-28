@@ -5,9 +5,11 @@
 <meta name="x-icue-property" data-name="modApiBase" data-label="iCUE HUD Bridge mod URL" data-type="textfield" data-default="http://localhost:27421" />
 <meta name="x-icue-property" data-name="slots" data-label="Slots to show (head, chest, legs, feet, mainhand, offhand)" data-type="textfield" data-default="head,chest,legs,feet" />
 <meta name="x-icue-property" data-name="showNames" data-label="Show item names (1 or 0)" data-type="textfield" data-default="1" />
+<meta name="x-icue-property" data-name="title" data-label="Title (blank for none)" data-type="textfield" data-default="Durability" />
+<meta name="x-icue-property" data-name="fontScale" data-label="Text size multiplier (1 = default)" data-type="textfield" data-default="1" />
 <style>
 	/* Sized from the panel's smaller side so the widget scales to any grid cell. */
-	html { font-size: 4.4vmin; }
+	html { font-size: 4.6vmin; }
 	html, body {
 		margin: 0;
 		padding: 0;
@@ -22,11 +24,23 @@
 		box-sizing: border-box;
 		width: 100%;
 		height: 100%;
-		padding: 5% 7%;
+		padding: 4% 7% 5%;
+		display: flex;
+		flex-direction: column;
+		gap: 0.3em;
 	}
+	.title {
+		font-size: 3.8vw;      /* by panel width so titles match across panels of the same width */
+		font-weight: 600;
+		opacity: 0.6;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+	}
+	.title:empty { display: none; }
 	.rows {
 		display: grid;
-		height: 100%;
+		flex: 1;
+		min-height: 0;
 		grid-auto-rows: 1fr;
 		gap: 3%;
 	}
@@ -112,12 +126,13 @@
 		font-size: 1.3em;
 		opacity: 0.6;
 	}
-	.wrap.offline-mode .rows { display: none; }
+	.wrap.offline-mode .rows, .wrap.offline-mode .title { display: none; }
 	.wrap.offline-mode .offline { display: flex; }
 </style>
 </head>
 <body>
 	<div class="wrap" id="wrap">
+		<div class="title" id="heading"></div>
 		<div class="rows" id="rows"></div>
 		<div class="offline" id="offline">HUD mod not running</div>
 	</div>
@@ -131,6 +146,8 @@
 		var list = v.split(",").map(function (s) { return s.trim(); }).filter(function (s) { return SLOT_LABEL[s]; });
 		return list.length ? list : ["head", "chest", "legs", "feet"];
 	}
+	JM.applyFontScale(4.6);
+	document.getElementById("heading").textContent = window.title === undefined ? "Durability" : String(window.title);
 	var names = String(window.showNames === undefined ? "1" : window.showNames).toLowerCase();
 	document.getElementById("wrap").classList.toggle("no-names", names === "0" || names === "false" || names === "no");
 
@@ -176,11 +193,20 @@
 			r.icon.innerHTML = '<span class="glyph">✕</span>';
 			return;
 		}
-		var img = document.createElement("img");
-		img.alt = "";
-		img.onerror = function () { r.icon.innerHTML = '<span class="glyph">' + SLOT_GLYPH[slot] + '</span>'; };
-		img.src = JM.iconUrl(itemId);
-		r.icon.appendChild(img);
+		// A glyph stands in while the picture is unavailable; retried every 20 s.
+		var attempt = 0;
+		function tryLoad() {
+			if (r.itemId !== itemId) return;   // slot changed meanwhile
+			var img = document.createElement("img");
+			img.alt = "";
+			img.onload = function () { if (r.itemId === itemId) { r.icon.innerHTML = ""; r.icon.appendChild(img); } };
+			img.onerror = function () {
+				r.icon.innerHTML = '<span class="glyph">' + SLOT_GLYPH[slot] + '</span>';
+				if (++attempt < 30) setTimeout(tryLoad, 20000);
+			};
+			img.src = JM.iconUrl(itemId) + "&t=" + attempt;
+		}
+		tryLoad();
 	}
 
 	function render(state) {

@@ -377,6 +377,8 @@ public class ContainerTracker {
 			return "sp_" + sanitize(client.getSingleplayerServer().getWorldData().getLevelName());
 		}
 		if (client.getCurrentServer() != null) {
+			// A Realm moves between addresses, so its name is the stable id; a normal server is its address.
+			if (client.getCurrentServer().isRealm()) return "realm_" + sanitize(client.getCurrentServer().name);
 			return "mp_" + sanitize(client.getCurrentServer().ip);
 		}
 		return "remote";
@@ -397,7 +399,31 @@ public class ContainerTracker {
 		tracked.clear();
 		dirty = false;
 		Path path = file();
-		if (!Files.exists(path)) return;
+		if (!Files.exists(path)) {
+			// First time on a Realm since files were keyed by address: gather what the
+			// address-named files hold (those are left in place) and continue from there.
+			if (worldKey.startsWith("realm_")) migrateLegacyRealmFiles(path);
+			return;
+		}
+		loadFrom(path, false);
+		System.out.println(IcueHudClient.LOG_PREFIX + "loaded " + tracked.size() + " tracked containers for " + worldKey);
+	}
+
+	private void migrateLegacyRealmFiles(Path target) {
+		try (var files = Files.list(target.getParent())) {
+			List<Path> legacy = files.filter(p -> p.getFileName().toString().startsWith("containers-mp_")).toList();
+			for (Path p : legacy) loadFrom(p, true);
+			if (!tracked.isEmpty()) {
+				System.out.println(IcueHudClient.LOG_PREFIX + "merged " + tracked.size() + " tracked containers from " + legacy.size() + " address-named files into " + target.getFileName());
+				save();
+			}
+		} catch (IOException e) {
+			// nothing to migrate
+		}
+	}
+
+	/** Reads one save file into `tracked`; with merge=true, existing entries win over the file's. */
+	private void loadFrom(Path path, boolean merge) {
 		try {
 			JsonObject root = JsonParser.parseString(Files.readString(path, StandardCharsets.UTF_8)).getAsJsonObject();
 			for (JsonElement el : root.getAsJsonArray("containers")) {
@@ -411,9 +437,10 @@ public class ContainerTracker {
 					JsonObject i = ie.getAsJsonObject();
 					t.items.put(i.get("id").getAsString(), i.get("count").getAsInt());
 				}
-				tracked.put(key(t.dimension, new BlockPos(t.x, t.y, t.z)), t);
+				String k = key(t.dimension, new BlockPos(t.x, t.y, t.z));
+				if (merge && tracked.containsKey(k) && tracked.get(k).seenAt >= t.seenAt) continue;
+				tracked.put(k, t);
 			}
-			System.out.println(IcueHudClient.LOG_PREFIX + "loaded " + tracked.size() + " tracked containers for " + worldKey);
 		} catch (Exception e) {
 			System.err.println(IcueHudClient.LOG_PREFIX + "could not read " + path + ": " + e.getMessage());
 		}

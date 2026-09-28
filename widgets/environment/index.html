@@ -3,9 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="x-icue-property" data-name="apiBase" data-label="JourneyMap webmap URL" data-type="textfield" data-default="http://localhost:8080" />
+<meta name="x-icue-property" data-name="fontScale" data-label="Text size multiplier (1 = default)" data-type="textfield" data-default="1" />
 <style>
 	/* Sized from the panel's smaller side so the widget scales to any grid cell. */
-	html { font-size: 4.4vmin; }
+	html { font-size: 6.5vmin; }
 	html, body {
 		margin: 0;
 		padding: 0;
@@ -42,7 +43,7 @@
 	}
 	.tags { display: flex; gap: 0.35em; flex: none; }
 	.tag {
-		font-size: 0.8em;
+		font-size: 1.05em;
 		padding: 0.12em 0.55em;
 		border-radius: 0.6em;
 		background: #22222a;
@@ -51,7 +52,7 @@
 	}
 	.tag.warn { background: #3a2a1b; color: #ffb454; }
 	.label {
-		font-size: 0.8em;
+		font-size: 0.95em;
 		opacity: 0.55;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
@@ -66,7 +67,7 @@
 		font-variant-numeric: tabular-nums;
 	}
 	.coords b {
-		font-size: 0.55em;
+		font-size: 0.6em;
 		font-weight: 600;
 		opacity: 0.55;
 		margin-right: 0.3em;
@@ -81,13 +82,13 @@
 		display: flex;
 		justify-content: space-between;
 		gap: 0.5em;
-		font-size: 0.95em;
+		font-size: 1.2em;
 		opacity: 0.85;
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
 	}
 	.chunk-row b {
-		font-size: 0.85em;
+		font-size: 0.9em;
 		font-weight: 600;
 		opacity: 0.55;
 		text-transform: uppercase;
@@ -130,6 +131,7 @@
 	</div>
 	<div class="offline">Minecraft not running</div>
 <script src="jm-api.js"></script>
+<script>JM.applyFontScale(6.5);</script>
 <script>
 	function setOffline(isOffline) {
 		document.body.classList.toggle("offline-mode", isOffline);

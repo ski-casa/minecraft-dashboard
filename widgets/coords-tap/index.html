@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="x-icue-property" data-name="apiBase" data-label="JourneyMap webmap URL" data-type="textfield" data-default="http://localhost:8080" />
+<meta name="x-icue-property" data-name="fontScale" data-label="Text size multiplier (1 = default)" data-type="textfield" data-default="1" />
 <meta name="x-icue-property" data-name="modApiBase" data-label="iCUE HUD Bridge mod URL (for the in-game capture key)" data-type="textfield" data-default="http://localhost:27421" />
 <meta name="x-icue-property" data-name="hotkey" data-label="Also capture when N is pressed in game (1 or 0; needs the mod)" data-type="textfield" data-default="1" />
 <style>
@@ -83,6 +84,7 @@
 		<div class="empty" id="empty">Tap to capture<br />coordinates</div>
 	</div>
 <script src="jm-api.js"></script>
+<script>JM.applyFontScale(4.4);</script>
 <script>
 	var wrap = document.getElementById("wrap");
 
