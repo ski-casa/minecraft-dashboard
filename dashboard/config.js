@@ -25,7 +25,20 @@ window.HUD_CONFIG = {
 		{ widget: "coords-tap", col: 1, row: 7, colSpan: 3, rowSpan: 3 },
 
 		// CENTER MAP
-		{ widget: "map", col: 4, row: 1, colSpan: 10, rowSpan: 9, params: { zoomLevel: 2, mapMode: "auto" } },
+		{ widget: "map", col: 4, row: 1, colSpan: 10, rowSpan: 9, params: {
+			zoomLevel: 1 ,        // starting zoom: -2 (far) ... 5 (close)
+			zoomButtons: true,   // on-screen + / - buttons (pinch also zooms)
+			zoomReset: 0,        // seconds after a manual zoom before it returns to zoomLevel (0 = never)
+			mapMode: "auto",     // "auto", "day", "night" or "topo"
+			autoNight: true,     // auto mode: switch to the night layer after dark
+			autoCaves: true,     // auto mode: switch to the cave layer when underground
+			mobs: true,          // hostile mobs
+			animals: false,      // passive animals
+			villagers: true,     // villagers
+			players: true,       // other players (you are always the blue arrow)
+			waypoints: true,     // your JourneyMap waypoints
+			labels: "all"        // name labels: "all", "players", "waypoints" or "none"
+		} },
 
 		// RIGHT WIDGETS
 		{ widget: "waypoints", col: 14, row: 1, colSpan: 3, rowSpan: 5 },

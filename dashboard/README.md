@@ -113,9 +113,12 @@ re-rendered. On top of the tiles it draws:
 
 | param       | values                                       | default | meaning |
 |-------------|----------------------------------------------|---------|---------|
-| `zoomLevel` | `-2` (far) … `5` (close)                     | `2`     | |
+| `zoomLevel` | `-2` (far) … `5` (close)                     | `2`     | starting zoom |
+| `zoomButtons` | `true`, `false`                            | `true`  | tap + / − buttons in the bottom-right corner (pinch also zooms) |
+| `zoomReset` | seconds, `0` = never                         | `0`     | after a manual zoom, return to `zoomLevel` once the map is left alone this long |
 | `mapMode`   | `auto`, `day`, `night`, `topo`               | `auto`  | a fixed layer, or follow the game |
 | `entities`  | `all`, `none`, or a list like `mobs,players` | `all`   | which radar lists to draw (`mobs`, `animals`, `villagers`, `players`) |
+| `mobs`, `animals`, `villagers`, `players` | `true`, `false`       | `true`  | switch one entity type off (applied after `entities`) |
 | `waypoints` | `1`, `0`                                     | `1`     | draw waypoints |
 | `labels`    | `all`, `players`, `waypoints`, `none`        | `all`   | which markers get a name label (death points always do) |
 | `autoNight` | `1`, `0`                                     | `1`     | in auto mode, switch to the night layer after dark |

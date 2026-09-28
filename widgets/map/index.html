@@ -4,9 +4,15 @@
 <meta charset="utf-8" />
 <meta name="x-icue-property" data-name="apiBase" data-label="JourneyMap webmap URL" data-type="textfield" data-default="http://localhost:8080" />
 <meta name="x-icue-property" data-name="zoomLevel" data-label="Zoom level (-2 far ... 5 close)" data-type="textfield" data-default="2" />
-<meta name="x-icue-property" data-name="mapMode" data-label="Map mode (auto, day, night, topo)" data-type="textfield" data-default="auto" />
+<meta name="x-icue-property" data-name="zoomButtons" data-label="Show + / - zoom buttons (1 or 0)" data-type="textfield" data-default="1" />
+<meta name="x-icue-property" data-name="zoomReset" data-label="Seconds before a manual zoom returns to the zoom level (0 = never)" data-type="textfield" data-default="0" />
+<meta name="x-icue-property" data-name="mapMode"data-label="Map mode (auto, day, night, topo)" data-type="textfield" data-default="auto" />
 <meta name="x-icue-property" data-name="entities" data-label="Entities on the map (all, none, or a list like mobs,players)" data-type="textfield" data-default="all" />
-<meta name="x-icue-property" data-name="waypoints" data-label="Show waypoints (1 or 0)" data-type="textfield" data-default="1" />
+<meta name="x-icue-property" data-name="mobs" data-label="Show hostile mobs (1 or 0)" data-type="textfield" data-default="1" />
+<meta name="x-icue-property" data-name="animals" data-label="Show animals (1 or 0)" data-type="textfield" data-default="1" />
+<meta name="x-icue-property" data-name="villagers" data-label="Show villagers (1 or 0)" data-type="textfield" data-default="1" />
+<meta name="x-icue-property" data-name="players" data-label="Show other players (1 or 0)" data-type="textfield" data-default="1" />
+<meta name="x-icue-property" data-name="waypoints"data-label="Show waypoints (1 or 0)" data-type="textfield" data-default="1" />
 <meta name="x-icue-property" data-name="labels" data-label="Name labels (all, players, waypoints, none)" data-type="textfield" data-default="all" />
 <meta name="x-icue-property" data-name="autoNight" data-label="Auto mode: night layer after dark (1 or 0)" data-type="textfield" data-default="1" />
 <meta name="x-icue-property" data-name="autoCaves" data-label="Auto mode: cave layer when underground (1 or 0)" data-type="textfield" data-default="1" />
@@ -41,6 +47,30 @@
 		pointer-events: none;
 	}
 	#dimBadge { right: 8px; top: 8px; }
+	#zoomControls {
+		position: absolute;
+		z-index: 1000;
+		right: 8px;
+		bottom: 8px;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	body.no-zoom-buttons #zoomControls { display: none; }
+	.zoom-btn {
+		width: 52px;
+		height: 52px;
+		border: 0;
+		border-radius: 8px;
+		background: rgba(16, 16, 20, 0.75);
+		color: #e8e8ec;
+		font: 600 30px/1 "Segoe UI", sans-serif;
+		cursor: pointer;
+		touch-action: manipulation;
+		-webkit-tap-highlight-color: transparent;
+	}
+	.zoom-btn:active { background: rgba(62, 166, 255, 0.6); }
+	.zoom-btn:disabled { opacity: 0.35; }
 	/* Entity and waypoint markers (Leaflet divIcons; the wrapper classes undo Leaflet's default box). */
 	.ent-wrap, .wp-wrap { background: none; border: 0; }
 	.ent {
@@ -109,6 +139,10 @@
 <body>
 	<div id="map"></div>
 	<div class="hud-badge" id="dimBadge">--</div>
+	<div id="zoomControls">
+		<button class="zoom-btn" id="zoomIn" type="button">+</button>
+		<button class="zoom-btn" id="zoomOut" type="button">&minus;</button>
+	</div>
 	<div class="offline" id="offline">Minecraft not running</div>
 <script src="leaflet.js"></script>
 <script src="jm-api.js"></script>
@@ -148,11 +182,14 @@
 	var KINDS = ["mobs", "animals", "villagers", "players"];
 	var FEATURE_FLAG = { mobs: "RadarMobs", animals: "RadarAnimals", villagers: "RadarVillagers", players: "RadarPlayers" };
 	var FALLBACK_COLOR = { mobs: "#ff5252", animals: "#7fd68a", villagers: "#c58cff", players: "#3ea6ff" };
+	// "entities" picks the lists; the per-kind flags (mobs, animals, villagers, players) can switch one off.
 	function enabledKinds() {
 		var v = String(window.entities === undefined ? "all" : window.entities).trim().toLowerCase();
-		if (v === "none" || v === "0" || v === "false") return [];
-		if (v === "all" || v === "1" || v === "true" || v === "") return KINDS.slice();
-		return v.split(",").map(function (k) { return k.trim(); }).filter(function (k) { return KINDS.indexOf(k) >= 0; });
+		var kinds;
+		if (v === "none" || v === "0" || v === "false") kinds = [];
+		else if (v === "all" || v === "1" || v === "true" || v === "") kinds = KINDS.slice();
+		else kinds = v.split(",").map(function (k) { return k.trim(); }).filter(function (k) { return KINDS.indexOf(k) >= 0; });
+		return kinds.filter(function (k) { return flag(k, true); });
 	}
 	function labelsMode() {
 		var v = String(window.labels === undefined ? "all" : window.labels).trim().toLowerCase();
@@ -178,7 +215,7 @@
 		zoomControl: false,
 		attributionControl: false,
 		dragging: false,
-		touchZoom: false,
+		touchZoom: "center",   // pinch zooms around the player, who stays centered
 		scrollWheelZoom: false,
 		doubleClickZoom: false,
 		boxZoom: false,
@@ -209,6 +246,34 @@
 			+ '</svg>'
 	});
 	var marker = L.marker([0, 0], { icon: arrowIcon, interactive: false, zIndexOffset: 1000 }).addTo(map);
+
+	// ---- manual zoom (+ / - buttons, pinch) ----
+	// Optionally drifts back to the configured zoom after zoomReset seconds untouched.
+	var zoomResetTimer = null;
+	function updateZoomButtons() {
+		document.getElementById("zoomIn").disabled = map.getZoom() >= map.getMaxZoom();
+		document.getElementById("zoomOut").disabled = map.getZoom() <= map.getMinZoom();
+	}
+	function scheduleZoomReset() {
+		clearTimeout(zoomResetTimer);
+		var seconds = parseFloat(window.zoomReset);
+		if (!(seconds > 0)) return;
+		zoomResetTimer = setTimeout(function () { map.setZoom(configuredZoom()); }, seconds * 1000);
+	}
+	function stepZoom(delta, ev) {
+		ev.preventDefault();
+		ev.stopPropagation();
+		map.setZoom(map.getZoom() + delta);
+	}
+	document.body.classList.toggle("no-zoom-buttons", !flag("zoomButtons", true));
+	document.getElementById("zoomIn").addEventListener("click", function (ev) { stepZoom(1, ev); });
+	document.getElementById("zoomOut").addEventListener("click", function (ev) { stepZoom(-1, ev); });
+	L.DomEvent.disableClickPropagation(document.getElementById("zoomControls"));
+	map.on("zoomend", function () {
+		updateZoomButtons();
+		if (map.getZoom() !== configuredZoom()) scheduleZoomReset();
+	});
+	updateZoomButtons();
 
 	function setOffline(isOffline) {
 		if (isOffline && state.online) { clearEntities(); clearWaypoints(); }
