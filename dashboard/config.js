@@ -27,7 +27,7 @@ window.HUD_CONFIG = {
 
 		// CENTER MAP
 		{ widget: "map", col: 3, row: 1, colSpan: 8, rowSpan: 9, params: {
-			zoomLevel: -2
+			zoomLevel: 2
 			 ,        // starting zoom: -2 (far) ... 5 (close)
 			zoomButtons: true,   // on-screen + / - buttons (pinch also zooms)
 			zoomReset: 0,        // seconds after a manual zoom before it returns to zoomLevel (0 = never)
@@ -35,7 +35,7 @@ window.HUD_CONFIG = {
 			autoNight: true,     // auto mode: switch to the night layer after dark
 			autoCaves: true,     // auto mode: switch to the cave layer when underground
 			mobs: true,          // hostile mobs
-			animals: false,      // passive animals
+			animals: false,      // passive animalss
 			villagers: true,     // villagers
 			players: true,       // other players (you are always the blue arrow)
 			waypoints: true,     // your JourneyMap waypoints

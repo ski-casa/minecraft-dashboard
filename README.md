@@ -2,34 +2,44 @@
 
 Live Minecraft dashboard on the Corsair Xeneon Edge touchscreen in a kiosk browser (or as iCUE widgets),
 fed by the [JourneyMap](https://modrinth.com/mod/journeymap) webmap API
-(`http://localhost:8080`). Works with solo worlds **and Realms**, on any
+(`http://localhost:8080`) plus a small client mod of its own for inventory,
+armor and chest contents. Works with solo worlds **and Realms**, on any
 Minecraft version JourneyMap supports (Fabric here; JourneyMap also ships
-Forge/NeoForge builds if you ever switch loaders).
+Forge/NeoForge builds if you ever switch loaders). Currently running on
+Minecraft 26.3.
+
+![The dashboard on the Xeneon Edge: clock, live and tapped coordinates, the cave map with hostile mobs, armor durability, a materials list, waypoints and environment](docs/dashboard.png)
+
+*Underground in a dripstone cave: the map has switched to the cave layer and shows
+eight hostiles nearby, the chestplate and leggings are in the red, and the build
+project has 6 chests' worth of cobbled deepslate counted.*
 
 ## Default layout
 
 The dashboard is a configurable grid ([dashboard/config.js](dashboard/config.js),
 documented in [dashboard/README.md](dashboard/README.md)). Out of the box it is
-a 16 × 9 grid with the map in the middle and three panels down each side:
+a 16 × 9 grid with the map in the middle, three panels down the left, gear and
+build progress next to the map, and waypoints and environment on the right:
 
 ```
-┌─────────┬───────────────────────────────┬─────────┐
-│  Clock  │                               │         │
-│day/night│                               │Waypoints│
-├─────────┤                               │direct-to│
-│ Coords  │           Live Map            │         │
-│ (live)  │  mobs · animals · villagers   ├─────────┤
-├─────────┤  players · waypoints          │ Environ-│
-│ Coords  │                               │  ment   │
-│ (tap)   │                               │         │
-└─────────┴───────────────────────────────┴─────────┘
+┌─────────┬─────────────────────────┬──────────┬─────────┐
+│  Clock  │                         │Durability│Waypoints│
+│day/night│                         │ helm     │direct-to│
+├─────────┤                         │ chest    │         │
+│ Coords  │        Live Map         │ legs …   ├─────────┤
+│ (live)  │ mobs · villagers        ├──────────┤         │
+├─────────┤ players · waypoints     │Materials │ Environ-│
+│ Coords  │ + / − zoom              │ have/need│  ment   │
+│ (tap)   │                         │ per item │         │
+└─────────┴─────────────────────────┴──────────┴─────────┘
 ```
 
 - **MC Live Map** (`widgets/map`) — chrome-free map centered on you with
   JourneyMap's radar drawn on it: hostile mobs (red ring), animals, villagers and
   other players (skin face and name), plus your waypoints with death points marked.
   Auto mode shows the night layer after dark and the cave layer underground (always
-  in the Nether). Zoom, mode and layers are parameters.
+  in the Nether). **+ / −** buttons zoom (optionally snapping back after a while);
+  each radar category, waypoints and labels can be switched off in the config.
 - **MC Coordinates** (`widgets/coords`) — X/Y/Z, dimension, facing; updates twice a second.
 - **MC Coordinates (tap)** (`widgets/coords-tap`) — updates **only when tapped** (or
   when you press **H** in game, with the mod below); shows the capture time. Use it to
@@ -42,15 +52,21 @@ a 16 × 9 grid with the map in the middle and three panels down each side:
 - **MC Environment** (`widgets/environment`) — biome, the Nether/Overworld portal
   coordinates for where you stand, chunk and region.
 - **MC Armor** (`widgets/armor`) — durability bars for your helmet, chestplate,
-  leggings and boots (optionally the held item too): green → yellow → orange → red,
-  a red ✕ for an empty slot. Needs the mod below.
+  leggings, boots and off hand (optionally the held item too): green → yellow →
+  orange → red, a red ✕ for an empty slot. Needs the mod below.
 - **MC Materials** (`widgets/materials`) — a build's shopping list (`smooth_stone:1242, …`
   in the config) with `have/need` per item, counting your inventory plus the chests
-  you placed. Needs the mod below.
+  you placed. Chests you find are ignored unless you claim them with a key while
+  they are open. Needs the mod below.
 
 The last two read the **iCUE HUD Bridge** mod in `mod/`, a small client-side Fabric
 mod that serves your inventory, equipment and tracked chest contents on
-`http://localhost:27421`. JourneyMap has no view of any of that.
+`http://localhost:27421`. JourneyMap has no view of any of that. Item pictures are
+the game's own sprites, or for 3D blocks (stairs, chests, shields) the Minecraft
+Wiki's inventory renders, fetched once and cached locally.
+
+Every panel's text size can be nudged per panel (`fontScale`), and the whole
+layout, including which panels exist, lives in `dashboard/config.js`.
 
 Change the grid, move panels, add a second map or a web page: edit
 `dashboard/config.js` and the running dashboard picks it up within seconds.
@@ -91,8 +107,9 @@ Both can be changed in `.minecraft\config\icuehud\keys.properties` (created on
 first launch; edits apply while the game runs).
 
 Prereq: the [Fabric loader](https://fabricmc.net/use/installer/) profile for
-your Minecraft version. That's the only thing this project needs per-version —
-everything else is version-independent.
+your Minecraft version. Per Minecraft version this project needs that profile,
+the Modrinth mods `install-mods.ps1` fetches, and a rebuild of the bridge mod;
+the dashboard and widgets themselves are version-independent.
 
 ### 2. Focus guard (one-time)
 
@@ -131,7 +148,7 @@ running dashboard, and mistakes are reported in a banner on the screen.
 <details>
 <summary>Alternative: iCUE widgets instead of the kiosk browser</summary>
 
-`.\scripts\package-widgets.ps1` builds `dist\*.icuewidget` files for all six
+`.\scripts\package-widgets.ps1` builds `dist\*.icuewidget` files for all eight
 widgets. Import the ones you want in **iCUE → Xeneon Edge → Widgets** (+ button)
 and arrange them in iCUE's 3 × 2 slot grid (for example MC Live Map → Large in
 columns 1–2, MC Coordinates → 3a, MC Coordinates (tap) → 3b). Same widgets, same
@@ -153,6 +170,14 @@ game is closed.
   (changed map regions), `/tiles/tile.png` (512px region tiles). The map widget
   bundles Leaflet (`CRS.Simple`, native zoom 0, 1 block = 1 map unit) and
   re-fetches only regions JourneyMap re-rendered.
+- The bridge mod (`mod/`) runs inside the client and serves
+  `http://localhost:27421/state`: hotbar and inventory, the six equipment slots
+  with damage values, the last position captured with the hotkey, and every
+  tracked chest with its contents as of the last time it was open. Chests are
+  tracked when you place them (or claim them with the hotkey) and remembered
+  per world in `.minecraft\config\icuehud\`. `/icon?id=` serves item pictures
+  from the game files, falling back to Minecraft Wiki inventory sprites cached
+  on disk.
 - `widgets/jm-api.js` is the shared API helper. Each widget folder carries its
   own copy because iCUE imports widgets as standalone packages; after editing
   the canonical file run `scripts\sync-jm-api.ps1` (the packager does it too).
