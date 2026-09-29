@@ -10,9 +10,9 @@ Minecraft 26.3.
 
 ![The dashboard on the Xeneon Edge: clock, live and tapped coordinates, the cave map with hostile mobs, armor durability, a materials list, waypoints and environment](docs/dashboard.png)
 
-*Underground in a dripstone cave: the map has switched to the cave layer and shows
-eight hostiles nearby, the chestplate and leggings are in the red, and the build
-project has 6 chests' worth of cobbled deepslate counted.*
+*Night, underground in a dripstone cave: the clock says the bed works now, the map
+has switched to the cave layer and shows three hostiles nearby, the chestplate and
+leggings are in the red, and the build project counts six tracked chests.*
 
 ## Default layout
 

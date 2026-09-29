@@ -6,7 +6,7 @@
 <meta name="x-icue-property" data-name="fontScale" data-label="Text size multiplier (1 = default)" data-type="textfield" data-default="1" />
 <style>
 	/* Sized from the panel's smaller side so the widget scales to any grid cell. */
-	html { font-size: 6.5vmin; }
+	html { font-size: 5.6vmin; }
 	html, body {
 		margin: 0;
 		padding: 0;
@@ -21,27 +21,34 @@
 		box-sizing: border-box;
 		width: 100%;
 		height: 100%;
-		padding: 5% 7%;
+		padding: 4% 6% 5%;
 		display: flex;
 		flex-direction: column;
 		justify-content: space-between;
+		gap: 0.25em;
+	}
+	.title {
+		font-size: 3.8vw;      /* by panel width so titles match across panels of the same width */
+		font-weight: 600;
+		opacity: 0.6;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
 	}
 	.biome-row {
 		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 0.6em;
+		flex-direction: column;
+		gap: 0.25em;
 		min-width: 0;
 	}
 	#biome {
-		font-size: 1.9em;
+		font-size: 1.35em;
 		font-weight: 700;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		min-width: 0;
 	}
-	.tags { display: flex; gap: 0.35em; flex: none; }
+	.tags { display: flex; gap: 0.35em; flex: none; flex-wrap: wrap; }
 	.tag {
 		font-size: 1.05em;
 		padding: 0.12em 0.55em;
@@ -82,10 +89,10 @@
 		display: flex;
 		justify-content: space-between;
 		gap: 0.5em;
-		font-size: 1.2em;
+		font-size: 1.1em;
 		opacity: 0.85;
 		font-variant-numeric: tabular-nums;
-		white-space: nowrap;
+		flex-wrap: wrap;   /* three cells; the last wraps to a second line when the panel is narrow */
 	}
 	.chunk-row b {
 		font-size: 0.9em;
@@ -111,6 +118,7 @@
 </head>
 <body>
 	<div class="wrap">
+		<div class="title">Environment</div>
 		<div class="biome-row">
 			<div id="biome">--</div>
 			<div class="tags" id="tags"></div>

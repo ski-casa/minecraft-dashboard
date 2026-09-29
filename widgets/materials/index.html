@@ -116,6 +116,7 @@
 	}
 	.legend .l-inv::before { background: #3ea6ff; }
 	.legend .l-box::before { background: #7fd68a; }
+	.empty-list:empty { display: none; }
 	.empty-list {
 		flex: 1;
 		display: flex;
@@ -182,6 +183,20 @@
 	var wanted = parseItems();
 	var rows = {};
 
+	// More rows than fit: shrink the text (down to ~half) until they do, rather than clip.
+	var baseFont = document.documentElement.style.fontSize;
+	var lastVisible = -1;
+	function fitList() {
+		var list = document.getElementById("list");
+		document.documentElement.style.fontSize = baseFont;
+		var size = parseFloat(baseFont);
+		for (var i = 0; i < 8 && list.scrollHeight > list.clientHeight + 1; i++) {
+			size *= 0.92;
+			document.documentElement.style.fontSize = size + "vmin";
+		}
+	}
+	window.addEventListener("resize", function () { lastVisible = -1; });
+
 	// Shows the item picture; while it is unavailable (mod not up yet, or fetching the
 	// sprite) a letter stands in and the picture is retried every 20 s.
 	function loadIcon(host, itemId, fallbackText) {
@@ -236,11 +251,14 @@
 			order.sort(function (a, b) { return rows[b.id].remaining - rows[a.id].remaining; });
 		}
 		// Re-append in order; the browser moves existing nodes, so icons are not reloaded.
+		var visible = 0;
 		order.forEach(function (item) {
 			var r = rows[item.id];
 			r.el.style.display = r.hidden ? "none" : "";
+			if (!r.hidden) visible++;
 			list.appendChild(r.el);
 		});
+		if (visible !== lastVisible) { lastVisible = visible; fitList(); }
 
 		var status = document.getElementById("status");
 		var n = (state.containers || []).length;

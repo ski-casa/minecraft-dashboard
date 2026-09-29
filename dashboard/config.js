@@ -61,7 +61,7 @@ window.HUD_CONFIG = {
 		} },
 
 		// RIGHT WIDGETS
-		{ widget: "waypoints", col: 14, row: 1, colSpan: 3, rowSpan: 3 },
-		{ widget: "environment", col: 14, row: 6, colSpan: 3, rowSpan: 3 }
+		{ widget: "waypoints", col: 14, row: 1, colSpan: 3, rowSpan: 4 },
+		{ widget: "environment", col: 14, row: 5, colSpan: 3, rowSpan: 4 }
 	]
 };
