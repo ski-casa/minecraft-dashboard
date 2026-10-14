@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="modApiBase" data-label="iCUE HUD Bridge mod URL" data-type="textfield" data-default="http://localhost:27421" />
+<meta name="x-icue-property" data-name="target" data-label="Target level (highlighted when reached)" data-type="textfield" data-default="30" />
+<meta name="x-icue-property" data-name="fontScale" data-label="Text size multiplier (1 = default)" data-type="textfield" data-default="1" />
+<style>
+	html { font-size: 4.4vmin; }
+	html, body {
+		-webkit-user-select: none;
+		user-select: none;
+		margin: 0; padding: 0; width: 100%; height: 100%;
+		background: #101014; color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+	}
+	.wrap { box-sizing: border-box; width: 100%; height: 100%; padding: 5% 8%; display: flex; flex-direction: column; justify-content: center; gap: 0.25em; }
+	.top { display: flex; align-items: baseline; justify-content: space-between; }
+	.level { display: flex; align-items: baseline; gap: 0.4em; }
+	.level .label { font-size: 1em; font-weight: 600; opacity: 0.6; letter-spacing: 0.05em; text-transform: uppercase; }
+	.level .num { font-family: "Consolas", "Cascadia Mono", monospace; font-size: 2.6em; font-weight: 700; line-height: 1; color: #7cf27c; font-variant-numeric: tabular-nums; }
+	.wrap.ready .level .num { color: #ffd60a; text-shadow: 0 0 0.4em rgba(255, 214, 10, 0.6); }
+	.target { font-size: 0.95em; opacity: 0.7; }
+	.wrap.ready .target { color: #ffd60a; opacity: 1; font-weight: 600; }
+	.bar { height: 0.6em; border-radius: 0.3em; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+	.bar > div { height: 100%; background: #7cf27c; border-radius: 0.3em; transition: width 0.3s; }
+	.line { display: flex; justify-content: space-between; font-size: 0.95em; }
+	.line .k { opacity: 0.6; }
+	.line .v { font-family: "Consolas", "Cascadia Mono", monospace; font-weight: 600; font-variant-numeric: tabular-nums; }
+	.line .v.low { color: #ff9f0a; }
+	.msg { display: none; flex: 1; align-items: center; justify-content: center; text-align: center; font-size: 1.3em; opacity: 0.6; }
+	.wrap.msg-mode .top, .wrap.msg-mode .bar, .wrap.msg-mode .line { display: none; }
+	.wrap.msg-mode .msg { display: flex; }
+</style>
+</head>
+<body>
+	<div class="wrap" id="wrap">
+		<div class="top">
+			<div class="level"><span class="label">Level</span><span class="num" id="level">&#8212;</span></div>
+			<div class="target" id="target"></div>
+		</div>
+		<div class="bar"><div id="fill"></div></div>
+		<div class="line"><span class="k">Lapis</span><span class="v" id="lapis"></span></div>
+		<div class="msg" id="msg">HUD mod not running</div>
+	</div>
+<script src="jm-api.js"></script>
+<script>
+	JM.applyFontScale(4.4);
+	var target = parseInt(window.target, 10) || 30;
+	function setMsg(text) {
+		document.getElementById("wrap").classList.toggle("msg-mode", !!text);
+		if (text) document.getElementById("msg").textContent = text;
+	}
+	function poll() {
+		JM.fetchState()
+			.then(function (state) {
+				if (!state.inGame) { setMsg("Not in a world"); return; }
+				var v = state.vitals;
+				if (!v) { setMsg("Mod update needed"); return; }
+				setMsg(null);
+				document.getElementById("level").textContent = v.xpLevel;
+				document.getElementById("fill").style.width = Math.round(v.xpProgress * 100) + "%";
+				var ready = v.xpLevel >= target;
+				document.getElementById("wrap").classList.toggle("ready", ready);
+				document.getElementById("target").textContent = ready ? "✓ level " + target + " reached" : (target - v.xpLevel) + " to " + target;
+				var lapis = (state.totals && state.totals["minecraft:lapis_lazuli"]) ? state.totals["minecraft:lapis_lazuli"].inventory : 0;
+				var l = document.getElementById("lapis");
+				l.textContent = lapis + (lapis ? " (" + Math.floor(lapis / 3) + " max enchants)" : "");
+				l.className = "v" + (lapis < 3 ? " low" : "");
+			})
+			.catch(function () { setMsg("HUD mod not running"); });
+	}
+	setMsg("HUD mod not running");
+	poll();
+	setInterval(poll, 1000);
+</script>
+</body>
+</html>

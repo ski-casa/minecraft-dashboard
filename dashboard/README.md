@@ -1,14 +1,90 @@
 # Dashboard configuration
 
-The dashboard is one page, [index.html](index.html), that reads
-[config.js](config.js) and lays out widgets on a grid. Everything you can
-change lives in `config.js`; you never need to touch `index.html`.
+The dashboard is one page, [index.html](index.html), that lays out widgets
+on a grid. You arrange it **on the screen itself**; [config.js](config.js)
+is the starting layout and a way to carry a layout to another machine.
+You never need to touch `index.html`.
 
-Edit `config.js` and save. The running dashboard re-reads it every few seconds
-and rebuilds only when something changed, so you can tweak the layout while
-you play and watch it happen on the Edge. Mistakes show up as a red banner at
-the top of the screen that names the panel and the problem; the rest of the
-layout keeps working.
+## Arranging the screen
+
+Tap the dim **⚙** in the bottom-left corner. The screen switches to edit
+mode: every panel gets a title bar, a resize corner, and the grid cells
+show through.
+
+- **Move** a panel by dragging it; **resize** by dragging the striped corner.
+  Panels snap to the grid and cannot overlap: a spot that does not fit shows
+  red and the panel springs back when you let go.
+- **⚙ on a panel** opens its settings (the same `params` as below, as a
+  form, plus its size in cells). **✕** removes it.
+- **＋ Add widget** lists every widget with a short description, in tabs:
+  *Map & navigation*, *Inventory & gear*, *Status*, *Tools* (touch-driven
+  helpers) and *Other* ("Web page" for any URL, "Empty panel"). The new panel
+  takes the first free space that fits its usual size, shrinking if it must;
+  move it where you want it.
+- **Screen** sets the grid (columns × rows), gap, edge, corner radius, colors
+  and the two API addresses. Changing the grid rescales every panel to keep
+  its place, so going from 16 × 9 to 32 × 18 just doubles the resolution of
+  the snapping. At the bottom it lists your **monitors**: tap one to move
+  the dashboard there (the kiosk window closes and reopens on that monitor
+  in a few seconds, and opens there from then on). This needs the small
+  control service that `scripts\start-dashboard.ps1` runs alongside the
+  browser (`scripts\dashboard-control.ps1`, on `localhost:27422`); without
+  it the list says so and the command-line way is
+  `start-dashboard.ps1 -Monitor <n> -Remember`. Note that the focus guard
+  only protects Minecraft from taps on the 32:9 monitor.
+- **Layout…** downloads the layout as a `config.js`, copies it to the
+  clipboard, lets you paste one in, or resets to `config.js`.
+- **Done** (or Esc) leaves edit mode. If you changed anything it asks
+  whether to **save the layout under a name** (a timestamp by default, or
+  the name of the layout you were editing, to update it in place).
+
+### Saved layouts
+
+Every change is saved at once as the *working layout* of the monitor you
+are on, in the kiosk browser's profile, and is back after a restart. Each
+monitor keeps its own working layout, so moving the dashboard to another
+monitor, arranging it there and moving back brings each one's own
+arrangement.
+
+Named layouts are the ones you keep: **Done → Save**, or **Screen → Saved
+layouts → Save current as…**. They are files in `dashboard\layouts\<name>.json`
+(written by the control service; when it is not running they are kept in the
+browser instead and the list says so). Each records the screen it was made
+on, and the list under **Screen** shows this monitor's layouts first, marked
+"this monitor"; others show their screen size. Tap one to load it (it
+replaces what is on screen; on a different screen it is scaled to the grid
+there), **✕** to delete it. The layout you loaded last is marked as current.
+
+To take a layout to another PC, copy its file into that PC's
+`dashboard\layouts\`, or use **Layout… → Download as config.js** and drop it
+in as `config.js` to make it the starting layout.
+
+Your saved layouts are personal and git-ignored. `dashboard\layouts\samples\`
+has two to start from, one for the 2560 × 720 Edge (the same arrangement as
+`config.js`) and one for a 16:9 monitor: copy a file up into
+`dashboard\layouts\` and it appears under **Saved layouts**.
+
+Where the layout comes from, in order: the one saved by the editor; otherwise
+`config.js`; otherwise a built-in default when `config.js` is missing or
+broken. While no layout is saved, `config.js` is re-read every few seconds
+and hand edits apply live, as before. Once you have edited on screen,
+`config.js` is only used by **Reset to config.js**.
+
+The grid is what makes the layout screen-independent: panels are placed in
+cells, not pixels, so the same layout fills a 2560 × 720 Edge or a 1920 × 1080
+monitor. Different shapes still want different arrangements, so on a new
+screen open the editor, pick a grid that suits it (**Screen**), shuffle, and
+save it under a name; it is listed for that monitor from then on.
+
+Widgets, their descriptions and their settings forms come from
+[widgets.js](widgets.js); add an entry there for a widget of your own.
+
+## Writing config.js by hand
+
+Everything below is still valid: `config.js` is a plain JavaScript object
+that the editor reads, writes and understands. Mistakes show up as a red
+banner at the top of the screen that names the panel and the problem; the
+rest of the layout keeps working.
 
 ## The grid
 
@@ -77,7 +153,7 @@ somewhere"), but explicit placement is easier to reason about.
 
 | key          | type    | default | meaning |
 |--------------|---------|---------|---------|
-| `widget`     | string  |         | folder name under `widgets/` (`map`, `coords`, `coords-tap`, `clock`, `waypoints`, `environment`, `armor`, `materials`), or `empty` for a blank panel |
+| `widget`     | string  |         | folder name under `widgets/` (see [Widgets](#widgets)), or `empty` for a blank panel |
 | `url`        | string  |         | instead of `widget`: any page to show in the panel (`file:///…`, `https://…`) |
 | `col`, `row` | 1..     | auto    | top-left cell; give both or neither |
 | `colSpan`    | 1..     | 1       | width in cells |
@@ -129,6 +205,8 @@ re-rendered. On top of the tiles it draws:
 | `labels`    | `all`, `players`, `waypoints`, `none`        | `all`   | which markers get a name label (death points always do) |
 | `autoNight` | `1`, `0`                                     | `1`     | in auto mode, switch to the night layer after dark |
 | `autoCaves` | `1`, `0`                                     | `1`     | in auto mode, switch to the cave layer underground |
+| `trail`     | minutes, `0` = off                           | `0`     | draw the path you walked in the last N minutes (a blue line) |
+| `centerX`, `centerZ` | block coordinates                   |         | **base cam**: keep the map on a fixed spot instead of following you (your arrow still moves) |
 
 At zoom 2 one block is 4 px, so a 640 px wide panel shows 160 blocks across.
 The map is deliberately not draggable or pinchable (touches would fight the
@@ -185,6 +263,18 @@ are hidden.
 | `maxRows`    | number           | `12`      | rows to render (extra rows are clipped by the panel height anyway) |
 | `deathFirst` | `1`, `0`         | `1`       | pin death points above everything else |
 
+### `threats` — hostile mobs as a list
+
+JourneyMap's radar hostiles (the same ones the map draws) sorted by
+distance, each with its sprite, the distance in blocks, the height
+difference and an arrow relative to where you face. Red under 8 blocks,
+orange under 16; the header counts them.
+
+| param     | values            | default | meaning |
+|-----------|-------------------|---------|---------|
+| `maxRows` | number            | `8`     | rows to show (nearest first) |
+| `range`   | blocks, `0` = all | `0`     | ignore anything farther than this |
+
 ### `environment` — biome, portal link, chunk
 
 The biome you stand in, tags for dimension / underground / sneaking, the
@@ -192,12 +282,33 @@ coordinates a Nether portal built here would link to (÷ 8 in the Overworld,
 × 8 in the Nether, nothing in the End), and your chunk, position within the
 chunk and region. No parameters.
 
+### `timers` — countdowns and a stopwatch
+
+Tap a timer to start it, tap again to pause, **↺** to reset; a finished
+countdown flashes red until reset. Timers keep running across a dashboard
+reload. No mod needed.
+
+| param     | values                          | default |
+|-----------|---------------------------------|---------|
+| `presets` | `Name|m:ss; Name|m:ss; …`, `0` = stopwatch | `Furnace x64|10:40; Brewing|0:20; Stopwatch|0` |
+
+### `checklist` — steps to tick off
+
+A list from the `items` parameter; tap to tick, "Uncheck all" to start over.
+Ticks are remembered per list. No mod needed.
+
+| param   | values                   | default                                  |
+|---------|--------------------------|------------------------------------------|
+| `title` | text                     | `Checklist`                              |
+| `items` | `step; step; …`          | `Pack food; Torches; Water bucket; Bed` |
+
 ## Mod-backed widgets
 
-JourneyMap knows nothing about your inventory, so these two widgets read the
-**iCUE HUD Bridge** mod in `mod/` (build and install it with
+JourneyMap knows nothing about your inventory or your condition, so these
+widgets read the **iCUE HUD Bridge** mod in `mod/` (build and install it with
 `scripts\build-mod.ps1`; it serves `http://localhost:27421/state`). Without
-the mod they show "HUD mod not running"; outside a world, "Not in a world".
+the mod they show "HUD mod not running"; outside a world, "Not in a world";
+with a mod older than the widget, "Mod update needed".
 
 ### `armor` — equipment durability
 
@@ -256,6 +367,92 @@ next time you open it.
 
 The footer shows how many chests are tracked, or, while a chest is open,
 whether it is counted (with the key hint if not).
+
+### `effects` — potion effects with timers
+
+One row per active effect: its icon, name and level, time left and a bar.
+Running-out effects jump to the top and turn red in the last `warnSeconds`
+(Fire Resistance, Water Breathing, Slow Falling, Invisibility and Conduit
+Power always warn; harmful effects count down in orange). Infinite effects
+(a beacon) show ∞. A small row above shows ♥ health, food, air when diving,
+XP level and 🔥 when on fire.
+
+| param         | values          | default   | meaning |
+|---------------|-----------------|-----------|---------|
+| `title`       | text            | `Effects` | heading; `""` for none |
+| `warnSeconds` | seconds         | `30`      | when "running out" starts |
+| `showVitals`  | `true`, `false` | `true`    | the health / food / air row |
+
+### `death` — death recovery
+
+Where you last died (the mod records it the moment it happens, per world,
+and remembers it across relogs), the distance and an arrow relative to where
+you face, the height difference, and a countdown until the items you dropped
+despawn (five minutes while their chunk is loaded; after that the panel says
+"likely gone"). Hidden an hour after the death unless `hideAfterMinutes` says
+otherwise.
+
+| param              | values                 | default |
+|--------------------|------------------------|---------|
+| `despawnMinutes`   | minutes                | `5`     |
+| `hideAfterMinutes` | minutes, `0` = never    | `60`    |
+
+### `light` — light level and spawn risk
+
+The block light where you stand as a lamp (red and pulsing at 0), the
+verdict ("Mobs can spawn here" when block light is 0 and the sky is not
+keeping them away, "Dark – unsafe after dusk" when daylight is all that
+protects the spot, "Lit – no spawns" otherwise), sky light, weather and the
+moon phase. No parameters.
+
+### `daycounter` — world day, session, real clock
+
+The world's day number (JourneyMap only exposes the time of day, so the
+clock widget cannot show it), how long this Minecraft session has been
+running, and the real time. `hourFormat`: `24` or `12`.
+
+### `inventory` — the 36 slots
+
+Your inventory as a 9-wide grid with item pictures, counts and durability
+bars, and the number of free slots in the corner (red when two or fewer).
+`hotbar`: `bottom` (like the game), `top` or `hide`.
+
+### `xp` — level and enchanting
+
+Level and progress to the next, lapis in your inventory (and how many
+enchants that is), gold once `target` (default 30) is reached.
+
+### `flight` — elytra
+
+Elytra durability, rockets in your inventory, altitude, horizontal speed,
+climb/sink rate and heading; the header says "gliding" while you are.
+Elytra "not worn" and zero rockets show orange/red. No parameters.
+
+### `connection` — ping and FPS
+
+Your latency to the server or Realm ("local" in single player) and the
+client's frame rate, colored green / orange / red. No parameters.
+
+### `actions` — quick actions
+
+Big buttons that act in the game through the mod. Each button is
+`Label|action:text`, separated by `;`:
+
+| action        | does                                                             | example |
+|---------------|------------------------------------------------------------------|---------|
+| `key:<KEY>`   | presses a key binding once (JourneyMap's **B** = new waypoint, **J** = full map, your own binds) | `Mark here|key:B` |
+| `chat:<text>` | says something in chat                                           | `Heading home|chat:heading home` |
+| `command:<cmd>` | runs a command (leading slash optional)                        | `Spawn|command:spawn` |
+| `capture`     | stamps your position onto the coords-tap panel (same as the capture key) | `Capture|capture` |
+| `perspective` | cycles first / third person                                      | `View|perspective` |
+| `screenshot`  | takes a screenshot                                               | `Shot|screenshot` |
+| `message:<text>` | shows text on your own action bar only                        | `Note|message:torches!` |
+
+Key names are Minecraft's (`A`–`Z`, `F1`–`F24`, `NUMPAD0`…), the same as in
+[Hotkeys](#hotkeys). A button flashes green when the mod took the action, red
+when it could not reach it. `columns` fixes the number of columns (`0` =
+automatic); `title` adds a heading. The focus guard gives focus back to the
+game after the tap, so the key or chat lands in the game as if you pressed it.
 
 ### Hotkeys
 
@@ -379,7 +576,12 @@ panels: [
 4. Size text with `vmin`/`vw`/`vh` units (`html { font-size: 4.4vmin; }` is
    what the bundled widgets use); the iframe is the widget's viewport, so
    those units are relative to the panel.
-5. Add `manifest.json` and a 256×256 `icon.png` only if you want
+5. Add it to [widgets.js](widgets.js) (name, description, usual size, and
+   one entry per parameter with its type and default) so it appears in the
+   **Add widget** menu with a settings form. A widget missing from the
+   catalog still works from `config.js`; its settings then show as plain
+   text fields.
+6. Add `manifest.json` and a 256×256 `icon.png` only if you want
    `scripts\package-widgets.ps1` to build an iCUE package for it.
 
 ## Limitations
@@ -457,5 +659,12 @@ panels: [
   look-up the block's material texture stands in; with nothing at all, a
   letter. The widgets retry every 20 s, so a letter also clears by itself once
   the mod is up. Counting is unaffected.
-- **Layout did not update** — `watchConfig` is `false`, or the file still
-  has an error (banner). `scripts\start-dashboard.ps1 -Restart` always works.
+- **Edits to config.js are ignored** — a layout arranged on screen is in
+  charge. **⚙ → Layout… → Reset to config.js** loads the file again (and
+  goes back to watching it). Otherwise `watchConfig` is `false`, or the
+  file still has an error (banner). `scripts\start-dashboard.ps1 -Restart`
+  always works.
+- **The layout was lost after a restart** — the kiosk browser must keep its
+  profile; the launcher opens it without private mode for that reason. If
+  you start the page some other way, avoid `--inprivate` / `--incognito`.
+  **Layout… → Download as config.js** is the safe copy.

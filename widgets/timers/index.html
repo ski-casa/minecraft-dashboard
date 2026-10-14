@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="presets" data-label="Timers: Name|m:ss; ... (0 = stopwatch)" data-type="textfield" data-default="Furnace x64|10:40; Brewing|0:20; Stopwatch|0" />
+<meta name="x-icue-property" data-name="fontScale" data-label="Text size multiplier (1 = default)" data-type="textfield" data-default="1" />
+<style>
+	html { font-size: 4.4vmin; }
+	html, body {
+		-webkit-user-select: none;
+		user-select: none;
+		margin: 0; padding: 0; width: 100%; height: 100%;
+		background: #101014; color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+		touch-action: manipulation;
+	}
+	.wrap { box-sizing: border-box; width: 100%; height: 100%; padding: 4% 5%; display: flex; flex-direction: column; gap: 3%; }
+	.timer {
+		flex: 1; min-height: 0;
+		display: grid; grid-template-columns: 1fr auto auto; align-items: center; column-gap: 0.5em;
+		padding: 0 0.6em; border-radius: 0.5em; background: #1d1d24; border: 1px solid rgba(255, 255, 255, 0.1);
+		cursor: pointer;
+	}
+	.timer:active { background: #2c2c36; }
+	.timer .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.timer .name small { display: block; font-weight: 400; opacity: 0.5; font-size: 0.75em; }
+	.timer .time { font-family: "Consolas", "Cascadia Mono", monospace; font-size: 1.6em; font-weight: 700; font-variant-numeric: tabular-nums; }
+	.timer.running .time { color: #5ac8fa; }
+	.timer.done { background: #5a2020; border-color: #ff453a; animation: pulse 0.5s ease-in-out infinite alternate; }
+	.timer.done .time { color: #ff453a; }
+	@keyframes pulse { from { opacity: 1; } to { opacity: 0.6; } }
+	.timer .reset {
+		appearance: none; border: 0; border-radius: 0.4em; width: 2em; height: 2em;
+		background: rgba(255, 255, 255, 0.1); color: #e8e8ec; font: inherit; font-size: 1em; cursor: pointer;
+	}
+	.timer .bar { grid-column: 1 / -1; height: 0.3em; border-radius: 0.15em; background: rgba(255, 255, 255, 0.1); overflow: hidden; margin-bottom: 0.3em; }
+	.timer .bar > div { height: 100%; background: #5ac8fa; }
+</style>
+</head>
+<body>
+	<div class="wrap" id="wrap"></div>
+<script src="jm-api.js"></script>
+<script>
+	JM.applyFontScale(4.4);
+	// "Furnace x64|10:40; Brewing|0:20; Stopwatch|0" -> [{ name, seconds }]  (0 = counts up)
+	function parse(spec) {
+		return String(spec).split(";").map(function (s) { return s.trim(); }).filter(Boolean).map(function (s) {
+			var bar = s.indexOf("|");
+			var name = bar < 0 ? s : s.slice(0, bar).trim(), t = bar < 0 ? "0" : s.slice(bar + 1).trim();
+			var parts = t.split(":").map(Number), seconds = 0;
+			parts.forEach(function (n) { seconds = seconds * 60 + (isNaN(n) ? 0 : n); });
+			return { name: name, seconds: seconds };
+		});
+	}
+	var presets = parse(window.presets === undefined ? "Furnace x64|10:40; Brewing|0:20; Stopwatch|0" : window.presets);
+	// State survives reloads: { i: { startedAt, pausedElapsed, running } }
+	var KEY = "hud.timers:" + String(window.presets || "");
+	var saved = {};
+	try { saved = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
+	function persist() { try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {} }
+
+	function elapsed(st) { return (st.pausedElapsed || 0) + (st.running ? (Date.now() - st.startedAt) / 1000 : 0); }
+	function fmt(s) {
+		s = Math.max(0, Math.round(s));
+		var h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, sec = s % 60;
+		return (h ? h + ":" + (m < 10 ? "0" : "") : "") + m + ":" + (sec < 10 ? "0" : "") + sec;
+	}
+
+	var wrap = document.getElementById("wrap"), rows = [];
+	presets.forEach(function (p, i) {
+		var el = document.createElement("div");
+		el.className = "timer";
+		el.innerHTML = '<div class="name">' + "" + '<small></small></div><div class="time"></div><button class="reset" title="Reset">↺</button><div class="bar"><div></div></div>';
+		el.querySelector(".name").firstChild.textContent = p.name;
+		el.querySelector(".name small").textContent = p.seconds ? "tap to start / pause · " + fmt(p.seconds) : "stopwatch · tap to start / pause";
+		el.addEventListener("click", function () {
+			var st = saved[i] || (saved[i] = { pausedElapsed: 0, running: false });
+			if (p.seconds && elapsed(st) >= p.seconds) { saved[i] = { pausedElapsed: 0, running: true, startedAt: Date.now() }; }
+			else if (st.running) { st.pausedElapsed = elapsed(st); st.running = false; }
+			else { st.startedAt = Date.now(); st.running = true; }
+			persist(); tick();
+		});
+		el.querySelector(".reset").addEventListener("click", function (e) {
+			e.stopPropagation();
+			saved[i] = { pausedElapsed: 0, running: false };
+			persist(); tick();
+		});
+		wrap.appendChild(el);
+		rows.push({ el: el, time: el.querySelector(".time"), fill: el.querySelector(".bar > div") });
+	});
+
+	function tick() {
+		presets.forEach(function (p, i) {
+			var st = saved[i] || { pausedElapsed: 0, running: false }, e = elapsed(st), r = rows[i];
+			var done = p.seconds > 0 && e >= p.seconds;
+			r.time.textContent = p.seconds ? fmt(p.seconds - e) : fmt(e);
+			r.fill.style.width = p.seconds ? Math.min(100, e / p.seconds * 100) + "%" : (st.running ? "100%" : "0%");
+			r.el.className = "timer" + (done ? " done" : st.running ? " running" : "");
+		});
+	}
+	tick();
+	setInterval(tick, 500);
+</script>
+</body>
+</html>

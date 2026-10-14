@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="title" data-label="Title (blank for none)" data-type="textfield" data-default="Checklist" />
+<meta name="x-icue-property" data-name="items" data-label="Items separated by ;" data-type="textfield" data-default="Pack food; Torches; Water bucket; Bed" />
+<meta name="x-icue-property" data-name="fontScale" data-label="Text size multiplier (1 = default)" data-type="textfield" data-default="1" />
+<style>
+	html { font-size: 4.4vmin; }
+	html, body {
+		-webkit-user-select: none;
+		user-select: none;
+		margin: 0; padding: 0; width: 100%; height: 100%;
+		background: #101014; color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+		touch-action: manipulation;
+	}
+	.wrap { box-sizing: border-box; width: 100%; height: 100%; padding: 4% 6% 5%; display: flex; flex-direction: column; gap: 0.3em; }
+	.title { font-size: 3.8vw; font-weight: 600; opacity: 0.6; letter-spacing: 0.05em; text-transform: uppercase; display: flex; justify-content: space-between; align-items: baseline; }
+	.title:empty { display: none; }
+	.title .count { font-family: "Consolas", "Cascadia Mono", monospace; letter-spacing: 0; }
+	.title .count.all { color: #34c759; opacity: 1; }
+	.list { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 0.25em; }
+	.item {
+		display: flex; align-items: center; gap: 0.6em;
+		padding: 0.25em 0.5em; border-radius: 0.4em; background: rgba(255, 255, 255, 0.05);
+		cursor: pointer;
+	}
+	.item:active { background: rgba(255, 255, 255, 0.12); }
+	.item .box { width: 1.2em; height: 1.2em; border-radius: 0.25em; border: 2px solid rgba(255, 255, 255, 0.4); display: flex; align-items: center; justify-content: center; font-size: 0.9em; flex: none; }
+	.item.done .box { background: #34c759; border-color: #34c759; color: #000; }
+	.item .text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.item.done .text { opacity: 0.45; text-decoration: line-through; }
+	.foot { display: flex; justify-content: flex-end; }
+	.foot button { appearance: none; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 0.4em; background: #1d1d24; color: #e8e8ec; font: inherit; font-size: 0.85em; padding: 0.25em 0.8em; cursor: pointer; }
+</style>
+</head>
+<body>
+	<div class="wrap">
+		<div class="title" id="heading"><span id="titleText"></span><span class="count" id="count"></span></div>
+		<div class="list" id="list"></div>
+		<div class="foot"><button id="reset">Uncheck all</button></div>
+	</div>
+<script src="jm-api.js"></script>
+<script>
+	JM.applyFontScale(4.4);
+	var items = String(window.items === undefined ? "Pack food; Torches; Water bucket; Bed" : window.items).split(";").map(function (s) { return s.trim(); }).filter(Boolean);
+	document.getElementById("titleText").textContent = window.title === undefined ? "Checklist" : String(window.title);
+	var KEY = "hud.checklist:" + items.join(";");
+	var done = {};
+	try { done = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
+	function persist() { try { localStorage.setItem(KEY, JSON.stringify(done)); } catch (e) {} }
+
+	var list = document.getElementById("list"), rows = [];
+	items.forEach(function (text, i) {
+		var el = document.createElement("div");
+		el.className = "item";
+		el.innerHTML = '<div class="box"></div><div class="text"></div>';
+		el.querySelector(".text").textContent = text;
+		el.addEventListener("click", function () { done[i] = !done[i]; persist(); render(); });
+		list.appendChild(el);
+		rows.push(el);
+	});
+	document.getElementById("reset").addEventListener("click", function () { done = {}; persist(); render(); });
+	function render() {
+		var n = 0;
+		rows.forEach(function (el, i) {
+			el.classList.toggle("done", !!done[i]);
+			el.querySelector(".box").textContent = done[i] ? "✓" : "";
+			if (done[i]) n++;
+		});
+		var c = document.getElementById("count");
+		c.textContent = n + "/" + items.length;
+		c.className = "count" + (n === items.length && items.length ? " all" : "");
+	}
+	render();
+</script>
+</body>
+</html>

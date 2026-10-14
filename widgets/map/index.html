@@ -15,10 +15,15 @@
 <meta name="x-icue-property" data-name="waypoints"data-label="Show waypoints (1 or 0)" data-type="textfield" data-default="1" />
 <meta name="x-icue-property" data-name="labels" data-label="Name labels (all, players, waypoints, none)" data-type="textfield" data-default="all" />
 <meta name="x-icue-property" data-name="autoNight" data-label="Auto mode: night layer after dark (1 or 0)" data-type="textfield" data-default="1" />
+<meta name="x-icue-property" data-name="trail" data-label="Trail: minutes of your path to draw (0 = off)" data-type="textfield" data-default="0" />
+<meta name="x-icue-property" data-name="centerX" data-label="Fixed center X (blank = follow you)" data-type="textfield" data-default="" />
+<meta name="x-icue-property" data-name="centerZ" data-label="Fixed center Z" data-type="textfield" data-default="" />
 <meta name="x-icue-property" data-name="autoCaves" data-label="Auto mode: cave layer when underground (1 or 0)" data-type="textfield" data-default="1" />
 <link rel="stylesheet" href="leaflet.css" />
 <style>
 	html, body {
+		-webkit-user-select: none;
+		user-select: none;   /* a long press must not select text (Edge shows its mini menu) */
 		margin: 0;
 		padding: 0;
 		width: 100%;
@@ -235,6 +240,14 @@
 	}).addTo(map);
 	var waypointLayer = L.layerGroup().addTo(map);
 	var entityLayer = L.layerGroup().addTo(map);
+	// Optional: a fixed center ("base cam") instead of following the player, and a breadcrumb trail.
+	var fixedCenter = (window.centerX !== undefined && window.centerX !== "" && window.centerZ !== undefined && window.centerZ !== "" &&
+		!isNaN(parseFloat(window.centerX)) && !isNaN(parseFloat(window.centerZ)))
+		? [-parseFloat(window.centerZ), parseFloat(window.centerX)] : null;
+	var trailMinutes = Math.max(0, parseFloat(window.trail) || 0);
+	var trailPoints = [];   // [time, latlng]
+	var trailLine = trailMinutes ? L.polyline([], { color: "#3ea6ff", weight: 3, opacity: 0.7, interactive: false }).addTo(map) : null;
+	if (fixedCenter) map.setView(fixedCenter, configuredZoom());
 
 	// Arrow points up at rotation 0; heading 0 = south = down-screen, hence +180.
 	var arrowIcon = L.divIcon({
@@ -342,7 +355,13 @@
 				marker.setLatLng(pos);
 				var svg = document.getElementById("arrowSvg");
 				if (svg) svg.style.transform = "rotate(" + ((p.heading + 180) % 360) + "deg)";
-				map.panTo(pos, { animate: true, duration: 0.4 });
+				if (!fixedCenter) map.panTo(pos, { animate: true, duration: 0.4 });
+				if (trailLine) {
+					var now = Date.now(), last = trailPoints[trailPoints.length - 1];
+					if (!last || Math.abs(last[1][0] - pos[0]) + Math.abs(last[1][1] - pos[1]) >= 1) trailPoints.push([now, pos]);
+					while (trailPoints.length && now - trailPoints[0][0] > trailMinutes * 60000) trailPoints.shift();
+					trailLine.setLatLngs(trailPoints.map(function (t) { return t[1]; }));
+				}
 			})
 			.catch(function () { setOffline(true); });
 	}

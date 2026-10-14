@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="modApiBase" data-label="iCUE HUD Bridge mod URL" data-type="textfield" data-default="http://localhost:27421" />
+<meta name="x-icue-property" data-name="fontScale" data-label="Text size multiplier (1 = default)" data-type="textfield" data-default="1" />
+<style>
+	html { font-size: 4.4vmin; }
+	html, body {
+		-webkit-user-select: none;
+		user-select: none;
+		margin: 0; padding: 0; width: 100%; height: 100%;
+		background: #101014; color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+	}
+	.wrap { box-sizing: border-box; width: 100%; height: 100%; padding: 5% 8%; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5em; align-items: center; }
+	.tile { display: flex; flex-direction: column; align-items: center; }
+	.tile .k { font-size: 0.9em; opacity: 0.55; text-transform: uppercase; letter-spacing: 0.05em; }
+	.tile .v { font-family: "Consolas", "Cascadia Mono", monospace; font-size: 2.4em; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+	.tile .v small { font-size: 0.45em; font-weight: 400; opacity: 0.6; }
+	.v.good { color: #34c759; }
+	.v.warn { color: #ff9f0a; }
+	.v.bad { color: #ff453a; }
+	.msg { display: none; grid-column: 1 / -1; align-items: center; justify-content: center; text-align: center; font-size: 1.3em; opacity: 0.6; }
+	.wrap.msg-mode .tile { display: none; }
+	.wrap.msg-mode .msg { display: flex; }
+</style>
+</head>
+<body>
+	<div class="wrap" id="wrap">
+		<div class="tile"><div class="k">Ping</div><div class="v" id="ping">&#8212;</div></div>
+		<div class="tile"><div class="k">FPS</div><div class="v" id="fps">&#8212;</div></div>
+		<div class="msg" id="msg">HUD mod not running</div>
+	</div>
+<script src="jm-api.js"></script>
+<script>
+	JM.applyFontScale(4.4);
+	function setMsg(text) {
+		document.getElementById("wrap").classList.toggle("msg-mode", !!text);
+		if (text) document.getElementById("msg").textContent = text;
+	}
+	function poll() {
+		JM.fetchState()
+			.then(function (state) {
+				if (!state.inGame) { setMsg("Not in a world"); return; }
+				var env = state.environment;
+				if (!env) { setMsg("Mod update needed"); return; }
+				setMsg(null);
+				var p = document.getElementById("ping");
+				if (typeof env.ping !== "number") { p.textContent = "—"; p.className = "v"; }
+				else if (env.ping < 0) { p.textContent = "local"; p.className = "v good"; }
+				else { p.innerHTML = env.ping + "<small> ms</small>"; p.className = "v " + (env.ping < 80 ? "good" : env.ping < 200 ? "warn" : "bad"); }
+				var f = document.getElementById("fps");
+				f.textContent = typeof env.fps === "number" ? env.fps : "—";
+				f.className = "v " + (typeof env.fps !== "number" ? "" : env.fps >= 50 ? "good" : env.fps >= 25 ? "warn" : "bad");
+			})
+			.catch(function () { setMsg("HUD mod not running"); });
+	}
+	setMsg("HUD mod not running");
+	poll();
+	setInterval(poll, 1000);
+</script>
+</body>
+</html>

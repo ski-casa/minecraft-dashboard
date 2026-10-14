@@ -1,0 +1,21 @@
+{
+	"author": "steve",
+	"id": "com.icuehud.widgets.actions",
+	"name": "MC Quick Actions",
+	"description": "Buttons that press keys, send chat or capture coordinates in game through the iCUE HUD Bridge mod.",
+	"version": "0.1.0",
+	"preview_icon": "icon.png",
+	"min_framework_version": "1.4.0",
+	"min_app_version": "5.47.0",
+	"os": [
+		{
+			"platform": "windows"
+		}
+	],
+	"supported_devices": [
+		{
+			"type": "dashboard_lcd"
+		}
+	],
+	"interactive": true
+}

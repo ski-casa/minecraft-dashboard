@@ -12,3 +12,6 @@ dist/
 mod/build/
 mod/.gradle/
 mod/run/
+
+# Layouts saved from the dashboard (personal); the samples/ folder is kept
+dashboard/layouts/*.json

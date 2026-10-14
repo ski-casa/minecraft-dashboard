@@ -1,0 +1,106 @@
+{
+	"name": "Monitor 16x9",
+	"note": "Made for a 16:9 monitor (2560x1440): a wide map with small panels down both sides.",
+	"screen": {
+		"width": 2560,
+		"height": 1440
+	},
+	"layout": {
+		"grid": {
+			"columns": 16,
+			"rows": 9
+		},
+		"gap": 8,
+		"padding": 8,
+		"radius": 10,
+		"background": "#000",
+		"panelBackground": "#101014",
+		"apiBase": "http://localhost:8080",
+		"modApiBase": "http://localhost:27421",
+		"panels": [
+			{
+				"widget": "clock",
+				"col": 1,
+				"row": 1,
+				"colSpan": 2,
+				"rowSpan": 2,
+				"params": {
+					"hourFormat": 24
+				}
+			},
+			{
+				"widget": "coords",
+				"col": 1,
+				"row": 3,
+				"colSpan": 2,
+				"rowSpan": 2
+			},
+			{
+				"widget": "coords-tap",
+				"col": 1,
+				"row": 5,
+				"colSpan": 2,
+				"rowSpan": 2
+			},
+			{
+				"widget": "map",
+				"col": 3,
+				"row": 1,
+				"colSpan": 11,
+				"rowSpan": 9,
+				"params": {
+					"zoomLevel": 2,
+					"zoomButtons": true,
+					"zoomReset": 0,
+					"mapMode": "auto",
+					"autoNight": true,
+					"autoCaves": true,
+					"mobs": true,
+					"animals": false,
+					"villagers": true,
+					"players": true,
+					"waypoints": true,
+					"labels": "all"
+				}
+			},
+			{
+				"widget": "armor",
+				"col": 14,
+				"row": 1,
+				"colSpan": 3,
+				"rowSpan": 3,
+				"params": {
+					"slots": "head,chest,legs,feet,offhand",
+					"showNames": true
+				}
+			},
+			{
+				"widget": "materials",
+				"col": 14,
+				"row": 4,
+				"colSpan": 3,
+				"rowSpan": 3,
+				"params": {
+					"items": "stone:1242, cobbled_deepslate:254, cobbled_deepslate_stairs:254, white_stained_glass:418, iron:200, diamond:40",
+					"title": "Materials",
+					"hideDone": false,
+					"sort": "list"
+				}
+			},
+			{
+				"widget": "waypoints",
+				"col": 14,
+				"row": 7,
+				"colSpan": 3,
+				"rowSpan": 3
+			},
+			{
+				"widget": "environment",
+				"col": 1,
+				"row": 7,
+				"colSpan": 2,
+				"rowSpan": 3
+			}
+		]
+	}
+}

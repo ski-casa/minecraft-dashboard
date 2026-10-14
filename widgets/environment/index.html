@@ -8,6 +8,8 @@
 	/* Sized from the panel's smaller side so the widget scales to any grid cell. */
 	html { font-size: 5.6vmin; }
 	html, body {
+		-webkit-user-select: none;
+		user-select: none;   /* a long press must not select text (Edge shows its mini menu) */
 		margin: 0;
 		padding: 0;
 		width: 100%;

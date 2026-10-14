@@ -1,0 +1,153 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="modApiBase" data-label="iCUE HUD Bridge mod URL" data-type="textfield" data-default="http://localhost:27421" />
+<meta name="x-icue-property" data-name="buttons" data-label="Buttons: Label|action:text; ... (actions: chat, command, key, capture, perspective, screenshot, message)" data-type="textfield" data-default="Mark here|key:B; Capture|capture; Screenshot|screenshot; View|perspective; Heading home|chat:heading home" />
+<meta name="x-icue-property" data-name="columns" data-label="Columns (0 = automatic)" data-type="textfield" data-default="0" />
+<meta name="x-icue-property" data-name="title" data-label="Title (blank for none)" data-type="textfield" data-default="" />
+<meta name="x-icue-property" data-name="fontScale" data-label="Text size multiplier (1 = default)" data-type="textfield" data-default="1" />
+<style>
+	/* Sized from the panel's smaller side so the widget scales to any grid cell. */
+	html { font-size: 4.4vmin; }
+	html, body {
+		-webkit-user-select: none;
+		user-select: none;   /* a long press must not select text (Edge shows its mini menu) */
+		margin: 0;
+		padding: 0;
+		width: 100%;
+		height: 100%;
+		background: #101014;
+		color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+		touch-action: manipulation;
+	}
+	.wrap {
+		box-sizing: border-box;
+		width: 100%;
+		height: 100%;
+		padding: 4% 5% 5%;
+		display: flex;
+		flex-direction: column;
+		gap: 0.3em;
+	}
+	.title {
+		font-size: 3.8vw;
+		font-weight: 600;
+		opacity: 0.6;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+	}
+	.title:empty { display: none; }
+	.grid {
+		flex: 1;
+		min-height: 0;
+		display: grid;
+		gap: 4%;
+		grid-auto-rows: 1fr;
+	}
+	button {
+		appearance: none;
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: 0.5em;
+		background: #1d1d24;
+		color: #e8e8ec;
+		font: inherit;
+		font-size: 1.1em;
+		font-weight: 600;
+		min-width: 0;
+		min-height: 0;
+		padding: 0 0.4em;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		cursor: pointer;
+		transition: background-color 0.15s, transform 0.08s;
+	}
+	button:active { transform: scale(0.96); background: #2c2c36; }
+	button .kind { display: block; font-size: 0.65em; font-weight: 400; opacity: 0.5; }
+	button.ok { background: #1f5a2e; border-color: #34c759; }
+	button.fail { background: #5a2020; border-color: #ff453a; }
+	button[disabled] { opacity: 0.4; cursor: default; }
+	.offline {
+		display: none;
+		flex: 1;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		font-size: 1.3em;
+		opacity: 0.6;
+	}
+	.wrap.offline-mode .grid, .wrap.offline-mode .title { display: none; }
+	.wrap.offline-mode .offline { display: flex; }
+</style>
+</head>
+<body>
+	<div class="wrap" id="wrap">
+		<div class="title" id="heading"></div>
+		<div class="grid" id="grid"></div>
+		<div class="offline" id="offline">HUD mod not running</div>
+	</div>
+<script src="jm-api.js"></script>
+<script>
+	JM.applyFontScale(4.4);
+	document.getElementById("heading").textContent = window.title === undefined ? "" : String(window.title);
+
+	// "Label|action:text; Label|action" -> [{ label, action, arg }]
+	var KINDS = { chat: "say", command: "/", key: "key", capture: "coords", perspective: "camera", screenshot: "F2", message: "note" };
+	function parseButtons(spec) {
+		return String(spec).split(";").map(function (s) { return s.trim(); }).filter(Boolean).map(function (s) {
+			var bar = s.indexOf("|");
+			var label = bar < 0 ? s : s.slice(0, bar).trim();
+			var rest = (bar < 0 ? s : s.slice(bar + 1)).trim();
+			var colon = rest.indexOf(":");
+			var action = (colon < 0 ? rest : rest.slice(0, colon)).trim().toLowerCase();
+			var arg = colon < 0 ? "" : rest.slice(colon + 1).trim();
+			return KINDS[action] ? { label: label, action: action, arg: arg } : null;
+		}).filter(Boolean);
+	}
+	var buttons = parseButtons(window.buttons === undefined ? "Mark here|key:B; Capture|capture; Screenshot|screenshot; View|perspective; Heading home|chat:heading home" : window.buttons);
+	var columns = parseInt(window.columns, 10);
+	var grid = document.getElementById("grid");
+	grid.style.gridTemplateColumns = (columns > 0) ? "repeat(" + columns + ", minmax(0, 1fr))"
+		: "repeat(" + Math.max(1, Math.min(buttons.length, Math.ceil(Math.sqrt(buttons.length * 1.6)))) + ", minmax(0, 1fr))";
+
+	buttons.forEach(function (b) {
+		var el = document.createElement("button");
+		el.innerHTML = "<span class=\"label\"></span><span class=\"kind\"></span>";
+		el.querySelector(".label").textContent = b.label;
+		var kind = KINDS[b.action];
+		el.querySelector(".kind").textContent = b.action === "key" ? "key " + b.arg.toUpperCase() : (b.action === "chat" || b.action === "command") ? kind + " " + b.arg : kind;
+		el.addEventListener("click", function () {
+			if (el.disabled) return;
+			var body = { action: b.action };
+			if (b.action === "key") body.key = b.arg;
+			else if (b.arg) body.text = b.arg;
+			el.disabled = true;
+			JM.postAction(body).then(function () { flash(el, "ok"); }, function () { flash(el, "fail"); });
+		});
+		grid.appendChild(el);
+	});
+	function flash(el, cls) {
+		el.className = cls;
+		setTimeout(function () { el.className = ""; el.disabled = false; }, 450);
+	}
+	if (!buttons.length) { grid.innerHTML = "<div class=\"offline\" style=\"display:flex\">Set the buttons parameter, e.g. Mark here|key:B; Capture|capture</div>"; }
+
+	function setOffline(text) {
+		var wrap = document.getElementById("wrap");
+		wrap.classList.toggle("offline-mode", !!text);
+		if (text) document.getElementById("offline").textContent = text;
+	}
+	function poll() {
+		JM.fetchState()
+			.then(function (state) { setOffline(state.inGame ? null : "Not in a world"); })
+			.catch(function () { setOffline("HUD mod not running"); });
+	}
+	setOffline("HUD mod not running");
+	poll();
+	setInterval(poll, 2000);
+</script>
+</body>
+</html>

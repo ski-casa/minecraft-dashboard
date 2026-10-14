@@ -1,0 +1,221 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="apiBase" data-label="JourneyMap webmap URL" data-type="textfield" data-default="http://localhost:8080" />
+<meta name="x-icue-property" data-name="modApiBase" data-label="iCUE HUD Bridge mod URL" data-type="textfield" data-default="http://localhost:27421" />
+<meta name="x-icue-property" data-name="despawnMinutes" data-label="Minutes until dropped items despawn" data-type="textfield" data-default="5" />
+<meta name="x-icue-property" data-name="hideAfterMinutes" data-label="Hide the death this many minutes after it (0 = never)" data-type="textfield" data-default="60" />
+<meta name="x-icue-property" data-name="fontScale" data-label="Text size multiplier (1 = default)" data-type="textfield" data-default="1" />
+<style>
+	/* Sized from the panel's smaller side so the widget scales to any grid cell. */
+	html { font-size: 4.4vmin; }
+	html, body {
+		-webkit-user-select: none;
+		user-select: none;   /* a long press must not select text (Edge shows its mini menu) */
+		margin: 0;
+		padding: 0;
+		width: 100%;
+		height: 100%;
+		background: #101014;
+		color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+	}
+	.wrap {
+		box-sizing: border-box;
+		width: 100%;
+		height: 100%;
+		padding: 4% 7% 5%;
+		display: flex;
+		flex-direction: column;
+		gap: 0.3em;
+	}
+	.title {
+		font-size: 3.8vw;
+		font-weight: 600;
+		opacity: 0.6;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+		display: flex;
+		justify-content: space-between;
+	}
+	.title .ago { text-transform: none; letter-spacing: 0; }
+	.main {
+		flex: 1;
+		min-height: 0;
+		display: grid;
+		grid-template-columns: auto 1fr;
+		column-gap: 0.8em;
+		align-items: center;
+	}
+	.arrow {
+		width: 3.2em;
+		height: 3.2em;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 50%;
+		background: rgba(255, 69, 58, 0.12);
+		font-size: 2.2em;
+		color: #ff453a;
+		transition: transform 0.3s ease-out;
+	}
+	.arrow.aligned { color: #34c759; background: rgba(52, 199, 89, 0.12); }
+	.facts { display: flex; flex-direction: column; gap: 0.1em; min-width: 0; }
+	.dist {
+		font-family: "Consolas", "Cascadia Mono", monospace;
+		font-size: 2.2em;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		line-height: 1.1;
+	}
+	.dist small { font-size: 0.45em; opacity: 0.6; font-weight: 400; margin-left: 0.3em; }
+	.coords {
+		font-family: "Consolas", "Cascadia Mono", monospace;
+		font-size: 1em;
+		opacity: 0.75;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.coords .dim { opacity: 0.6; margin-left: 0.5em; }
+	.despawn {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		align-items: baseline;
+		column-gap: 0.6em;
+		font-size: 0.95em;
+	}
+	.despawn .label { opacity: 0.6; }
+	.despawn .left {
+		font-family: "Consolas", "Cascadia Mono", monospace;
+		font-size: 1.3em;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		color: #ff9f0a;
+	}
+	.despawn .left.urgent { color: #ff453a; animation: pulse 0.6s ease-in-out infinite alternate; }
+	.despawn .left.gone { color: #8a8a96; font-size: 1em; font-weight: 400; }
+	.despawn .bar { grid-column: 1 / span 2; height: 0.5em; border-radius: 0.25em; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+	.despawn .bar > div { height: 100%; background: #ff9f0a; border-radius: 0.25em; transition: width 1s linear; }
+	.despawn .left.urgent ~ .bar > div { background: #ff453a; }
+	@keyframes pulse { from { opacity: 1; } to { opacity: 0.35; } }
+	.msg {
+		display: none;
+		flex: 1;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		font-size: 1.3em;
+		opacity: 0.6;
+		padding: 0 5%;
+	}
+	.wrap.msg-mode .main, .wrap.msg-mode .title, .wrap.msg-mode .despawn { display: none; }
+	.wrap.msg-mode .msg { display: flex; }
+</style>
+</head>
+<body>
+	<div class="wrap" id="wrap">
+		<div class="title"><span>&#9760; Last death</span><span class="ago" id="ago"></span></div>
+		<div class="main">
+			<div class="arrow" id="arrow">&#8593;</div>
+			<div class="facts">
+				<div class="dist"><span id="dist">&#8212;</span><small id="vert"></small></div>
+				<div class="coords"><span id="coords"></span><span class="dim" id="dim"></span></div>
+			</div>
+		</div>
+		<div class="despawn">
+			<span class="label" id="despawnLabel">Items despawn in</span><span class="left" id="left"></span>
+			<div class="bar"><div id="fill"></div></div>
+		</div>
+		<div class="msg" id="msg">HUD mod not running</div>
+	</div>
+<script src="jm-api.js"></script>
+<script>
+	JM.applyFontScale(4.4);
+	var despawnMs = (parseFloat(window.despawnMinutes) || 5) * 60000;
+	var hideMin = parseFloat(window.hideAfterMinutes); if (isNaN(hideMin)) hideMin = 60;
+
+	var death = null, player = null;
+
+	function setMsg(text) {
+		var wrap = document.getElementById("wrap");
+		wrap.classList.toggle("msg-mode", !!text);
+		if (text) document.getElementById("msg").textContent = text;
+	}
+	function fmt(ms) {
+		var s = Math.max(0, Math.ceil(ms / 1000)), m = Math.floor(s / 60);
+		s -= m * 60;
+		return m + ":" + (s < 10 ? "0" : "") + s;
+	}
+	function agoText(ms) {
+		var m = Math.floor(ms / 60000);
+		if (m < 1) return "just now";
+		if (m < 60) return m + " min ago";
+		var h = Math.floor(m / 60);
+		return h + " h " + (m - h * 60) + " min ago";
+	}
+
+	// Runs every second: countdown and, when the player moved, distance and arrow.
+	function render() {
+		if (!death) { setMsg("No death recorded yet – good."); return; }
+		var age = Date.now() - death.at;
+		if (hideMin > 0 && age > hideMin * 60000) { setMsg("No recent death."); return; }
+		setMsg(null);
+		document.getElementById("ago").textContent = agoText(age);
+		var dl = JM.dimensionLabel(death.dimension);
+		document.getElementById("coords").textContent = Math.round(death.x) + " / " + Math.round(death.y) + " / " + Math.round(death.z);
+		document.getElementById("dim").textContent = dl;
+
+		var leftMs = despawnMs - age, left = document.getElementById("left"), fill = document.getElementById("fill");
+		if (leftMs > 0) {
+			document.getElementById("despawnLabel").textContent = "Items despawn in";
+			left.textContent = fmt(leftMs);
+			left.className = "left" + (leftMs < 60000 ? " urgent" : "");
+			fill.style.width = (leftMs / despawnMs * 100) + "%";
+		} else {
+			document.getElementById("despawnLabel").textContent = "Dropped items";
+			left.textContent = "likely gone (unless the chunk unloaded)";
+			left.className = "left gone";
+			fill.style.width = "0%";
+		}
+
+		var arrow = document.getElementById("arrow");
+		if (!player || JM.dimensionKey(player.dimensionKey) !== JM.dimensionKey(death.dimension)) {
+			document.getElementById("dist").textContent = player ? "other dimension" : "—";
+			document.getElementById("vert").textContent = "";
+			arrow.style.transform = "";
+			arrow.className = "arrow";
+			return;
+		}
+		var flat = Math.sqrt(Math.pow(death.x - player.x, 2) + Math.pow(death.z - player.z, 2));
+		var dy = Math.round(death.y - player.y);
+		document.getElementById("dist").textContent = Math.round(flat);
+		document.getElementById("vert").textContent = "blocks" + (Math.abs(dy) >= 3 ? (dy > 0 ? " ↑" : " ↓") + Math.abs(dy) : "");
+		var rel = JM.relativeBearing(player.heading, JM.bearingTo(player.x, player.z, death.x, death.z));
+		arrow.style.transform = "rotate(" + rel + "deg)";
+		arrow.className = "arrow" + (Math.abs(rel) <= 12 && flat > 3 ? " aligned" : "");
+	}
+
+	function pollMod() {
+		JM.fetchState()
+			.then(function (state) {
+				if (!state.inGame) { death = null; setMsg("Not in a world"); return; }
+				death = state.death || null;
+				render();
+			})
+			.catch(function () { death = null; setMsg("HUD mod not running"); });
+	}
+	function pollPlayer() {
+		JM.fetchPlayer().then(function (p) { player = p; }).catch(function () { player = null; });
+	}
+	setMsg("HUD mod not running");
+	pollMod(); pollPlayer();
+	setInterval(pollMod, 1000);
+	setInterval(pollPlayer, 500);
+	setInterval(render, 1000);
+</script>
+</body>
+</html>

@@ -11,13 +11,17 @@
 		background: #000;
 		overflow: hidden;
 		font-family: "Segoe UI", sans-serif;
+		color: #e8e8ec;
+		-webkit-user-select: none;
+		user-select: none;
+		touch-action: none;
 	}
 	#grid {
 		box-sizing: border-box;
 		width: 100vw;
 		height: 100vh;
 		display: grid;
-		grid-auto-flow: dense;
+		position: relative;
 	}
 	.panel {
 		position: relative;
@@ -48,11 +52,285 @@
 		white-space: pre-wrap;
 	}
 	#errors.show { display: block; }
+
+	/* ---- layout editor ---- */
+	#gear {
+		position: fixed;
+		left: 0;
+		bottom: 0;
+		z-index: 20;
+		width: 44px;
+		height: 44px;
+		border: 0;
+		border-radius: 0 12px 0 0;
+		background: rgba(40, 40, 48, 0.7);
+		color: #ccc;
+		font-size: 24px;
+		line-height: 44px;
+		text-align: center;
+		cursor: pointer;
+		opacity: 0.6;
+	}
+	#gear:hover, #gear:active { opacity: 1; }
+	body.editing #gear { display: none; }
+
+	#toolbar {
+		display: none;
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 20;
+		box-sizing: border-box;
+		padding: 8px 12px;
+		gap: 8px;
+		align-items: center;
+		background: rgba(14, 14, 18, 0.94);
+		border-top: 1px solid #2a2a34;
+		font-size: 15px;
+	}
+	body.editing #toolbar { display: flex; }
+	#toolbar .hint { flex: 1; color: #8a8a96; font-size: 13px; padding: 0 6px; }
+	body.editing #grid { height: calc(100vh - 56px); }
+
+	button.btn {
+		appearance: none;
+		border: 1px solid #3a3a46;
+		border-radius: 8px;
+		background: #1d1d24;
+		color: #e8e8ec;
+		font: inherit;
+		font-size: 15px;
+		padding: 9px 14px;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	button.btn:active { background: #2c2c36; }
+	button.btn.primary { background: #2563c7; border-color: #2d6fdc; }
+	button.btn.danger { background: #7a2525; border-color: #933; }
+	button.btn.ghost { background: transparent; }
+
+	/* grid lines while editing */
+	body.editing #grid::before {
+		content: "";
+		position: absolute;
+		inset: var(--pad, 8px);
+		pointer-events: none;
+		background-image:
+			repeating-linear-gradient(to right, rgba(255,255,255,0.09) 0 1px, transparent 1px var(--cell-w, 100px)),
+			repeating-linear-gradient(to bottom, rgba(255,255,255,0.09) 0 1px, transparent 1px var(--cell-h, 100px));
+		background-position: calc(var(--gap, 8px) / -2) calc(var(--gap, 8px) / -2);
+	}
+	body.editing .panel {
+		outline: 2px solid rgba(90, 140, 255, 0.55);
+		outline-offset: -2px;
+	}
+	body.editing .panel.dragging { outline-color: #5a8cff; z-index: 5; box-shadow: 0 0 0 4px rgba(90,140,255,0.25); }
+	body.editing .panel.invalid { outline-color: #ff5252; box-shadow: 0 0 0 4px rgba(255,82,82,0.3); }
+	.panel .cover,
+	.panel .titlebar,
+	.panel .resize { display: none; }
+	body.editing .panel .cover {
+		display: block;
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		cursor: move;
+		background: rgba(0, 0, 0, 0.12);
+		touch-action: none;
+	}
+	body.editing .panel .titlebar {
+		display: flex;
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 0;
+		z-index: 2;
+		align-items: center;
+		gap: 6px;
+		padding: 4px 6px 4px 10px;
+		background: rgba(12, 12, 16, 0.85);
+		font-size: 13px;
+		pointer-events: none;
+	}
+	.panel .titlebar .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.panel .titlebar button {
+		pointer-events: auto;
+		appearance: none;
+		border: 0;
+		border-radius: 6px;
+		width: 34px;
+		height: 30px;
+		background: #2a2a34;
+		color: #e8e8ec;
+		font-size: 15px;
+		cursor: pointer;
+	}
+	.panel .titlebar button.remove { background: #5a2020; }
+	body.editing .panel .resize {
+		display: block;
+		position: absolute;
+		right: 0;
+		bottom: 0;
+		z-index: 2;
+		width: 44px;
+		height: 44px;
+		cursor: nwse-resize;
+		touch-action: none;
+		background:
+			linear-gradient(135deg, transparent 0 55%, rgba(90,140,255,0.85) 55% 65%, transparent 65% 75%, rgba(90,140,255,0.85) 75% 85%, transparent 85%);
+	}
+
+	/* dialogs */
+	#modal {
+		display: none;
+		position: fixed;
+		inset: 0;
+		z-index: 30;
+		background: rgba(0, 0, 0, 0.6);
+		align-items: center;
+		justify-content: center;
+	}
+	#modal.show { display: flex; }
+	#modal .dialog {
+		box-sizing: border-box;
+		width: min(640px, 92vw);
+		max-height: 92vh;
+		overflow: auto;
+		border: 1px solid #33333f;
+		border-radius: 14px;
+		background: #16161c;
+		padding: 18px 20px;
+		font-size: 15px;
+	}
+	#modal .dialog.wide { width: min(1180px, 96vw); }
+	#modal .dialog.form { width: min(1000px, 94vw); }
+	#modal h2 { margin: 0 0 12px; font-size: 18px; font-weight: 600; }
+	#modal p { margin: 6px 0 12px; color: #a0a0ac; font-size: 14px; }
+	/* Fields flow into two columns when the dialog is wide enough; a short
+	   screen like the Edge's 720 px would otherwise need scrolling. */
+	#modal .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0 28px; align-items: start; }
+	#modal .field { display: grid; grid-template-columns: minmax(140px, 1fr) 2fr; gap: 4px 12px; align-items: center; margin: 8px 0; }
+	#modal .fields .section { grid-column: 1 / -1; }
+	#modal .field label { font-size: 14px; }
+	#modal .field .help { grid-column: 2; color: #7d7d8a; font-size: 12px; margin-top: -2px; }
+	#modal input[type=text], #modal input[type=number], #modal select, #modal textarea {
+		box-sizing: border-box;
+		width: 100%;
+		border: 1px solid #3a3a46;
+		border-radius: 8px;
+		background: #0f0f13;
+		color: #e8e8ec;
+		font: inherit;
+		font-size: 15px;
+		padding: 8px 10px;
+	}
+	#modal textarea { min-height: 90px; font-family: Consolas, "Cascadia Mono", monospace; font-size: 13px; }
+	#modal .switch { display: inline-flex; align-items: center; gap: 8px; }
+	#modal .switch input { width: 22px; height: 22px; }
+	#modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+	#modal .actions .left { margin-right: auto; }
+	#modal .catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+	#modal .catalog span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+	#modal .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+	#modal .tabs .tab {
+		appearance: none; border: 1px solid #33333f; border-radius: 999px; background: #1d1d24; color: #c8c8d0;
+		font: inherit; font-size: 14px; padding: 7px 14px; cursor: pointer;
+	}
+	#modal .tabs .tab.active { background: #2563c7; border-color: #2d6fdc; color: #fff; }
+	#modal .catalog button {
+		appearance: none;
+		text-align: left;
+		border: 1px solid #33333f;
+		border-radius: 10px;
+		background: #1d1d24;
+		color: #e8e8ec;
+		font: inherit;
+		padding: 10px 12px;
+		cursor: pointer;
+	}
+	#modal .catalog button:active { background: #2c2c36; }
+	#modal .catalog button.btn.danger { background: #7a2525; border-color: #933; text-align: center; }
+
+	/* Screen dialog: saved layouts and monitors stacked on the left, compact settings on the right */
+	#modal .dialog.screen { width: min(1180px, 96vw); }
+	#modal .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 0 32px; align-items: start; }
+	#modal .twocol .section:first-child { margin-top: 0; }
+	#modal .stack { display: flex; flex-direction: column; gap: 5px; }
+	#modal .stack .row { display: flex; gap: 5px; align-items: stretch; }
+	#modal .stack .row > button:first-child {
+		flex: 1;
+		appearance: none;
+		text-align: left;
+		display: flex;
+		align-items: baseline;
+		gap: 10px;
+		border: 1px solid #33333f;
+		border-radius: 8px;
+		background: #1d1d24;
+		color: #e8e8ec;
+		font: inherit;
+		padding: 7px 11px;
+		cursor: pointer;
+		min-width: 0;
+	}
+	#modal .stack .row > button:first-child:active { background: #2c2c36; }
+	#modal .stack .row > button:first-child[disabled] { opacity: .6; cursor: default; }
+	#modal .stack .row.active > button:first-child { border-color: #2d6fdc; }
+	#modal .stack .row b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	#modal .stack .row span { color: #9a9aa6; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	#modal .stack .row .x {
+		appearance: none;
+		border: 1px solid #933;
+		border-radius: 8px;
+		background: #5a2020;
+		color: #e8e8ec;
+		font: inherit;
+		width: 40px;
+		cursor: pointer;
+	}
+	#modal .compact .field { grid-template-columns: 1fr 120px; gap: 2px 10px; margin: 5px 0; }
+	#modal .compact .field.wide { grid-template-columns: 1fr 240px; }
+	#modal .compact .field .help { display: none; }
+	#modal .compact input[type=text], #modal .compact input[type=number] { padding: 6px 8px; font-size: 14px; }
+	#modal .compact .section { margin: 10px 0 4px; }
+	#modal .catalog b { display: block; margin-bottom: 3px; }
+	#modal .catalog span { color: #9a9aa6; font-size: 13px; }
+	#modal .section { margin: 14px 0 6px; font-size: 13px; color: #8a8a96; text-transform: uppercase; letter-spacing: 0.06em; }
+	#modal .note { font-size: 13px; color: #9a9aa6; }
+	#modal .ok { color: #7fd68a; }
+	#modal .bad { color: #ff7b7b; }
+
+	#toast {
+		display: none;
+		position: fixed;
+		left: 50%;
+		top: 16px;
+		z-index: 40;
+		pointer-events: none;
+		transform: translateX(-50%);
+		padding: 10px 16px;
+		border-radius: 10px;
+		background: rgba(30, 30, 38, 0.96);
+		border: 1px solid #3a3a46;
+		font-size: 14px;
+	}
+	#toast.show { display: block; }
 </style>
 </head>
 <body>
 	<pre id="errors"></pre>
 	<div id="grid"></div>
+	<button id="gear" title="Edit layout">⚙</button>
+	<div id="toolbar">
+		<button class="btn primary" id="btnAdd">＋ Add widget</button>
+		<button class="btn" id="btnScreen">Screen</button>
+		<button class="btn" id="btnLayout">Layout…</button>
+		<span class="hint">Drag a panel to move it, drag its corner to resize. ⚙ on a panel for its settings.</span>
+		<button class="btn" id="btnDone">Done</button>
+	</div>
+	<div id="modal"></div>
+	<div id="toast"></div>
 	<script>
 		// Registered before config.js loads so a syntax error in it can be reported.
 		var lastScriptError = null;
@@ -60,11 +338,17 @@
 			if (e && e.filename && /config\.js/.test(e.filename)) lastScriptError = e.message;
 		});
 	</script>
+	<script src="widgets.js"></script>
 	<script src="config.js"></script>
 	<script>
-	// The layout is described by window.HUD_CONFIG from config.js (see README.md
-	// in this folder). This built-in layout is only used when config.js is
-	// missing or broken, so the screen still shows something useful.
+	// The layout is a plain object in the shape of window.HUD_CONFIG (see
+	// README.md in this folder). Where it comes from, in order:
+	//   1. the layout saved by the on-screen editor (localStorage),
+	//   2. config.js, the starting layout (also what "Reset" goes back to),
+	//   3. this built-in one, when config.js is missing or broken.
+	// While no layout is saved, config.js is re-read every few seconds so
+	// hand edits still apply live; once the editor has saved one, config.js
+	// is only a starting point.
 	var DEFAULT_CONFIG = {
 		grid: { columns: 16, rows: 9 },
 		apiBase: "http://localhost:8080",
@@ -80,26 +364,45 @@
 	};
 	var KNOWN_TOP = ["grid", "gap", "padding", "radius", "background", "panelBackground", "apiBase", "modApiBase", "watchConfig", "watchInterval", "panels"];
 	var KNOWN_PANEL = ["widget", "url", "col", "row", "colSpan", "rowSpan", "params", "background"];
+	var STORAGE_KEY = "hud.layout.v1";
+	var CONTROL_URL = "http://localhost:27422";   // scripts/dashboard-control.ps1: monitors, saved layouts
+	var CATALOG = Array.isArray(window.HUD_WIDGETS) ? window.HUD_WIDGETS : [];
+	var COMMON_PARAMS = Array.isArray(window.HUD_COMMON_PARAMS) ? window.HUD_COMMON_PARAMS : [];
 
-	var current = null;        // last successfully applied config
-	var currentJson = null;
+	var layout = null;         // the live layout; every panel has an explicit position and a runtime id
+	var layoutSaved = false;   // true once the editor's copy (localStorage) is in charge
+	var configJson = null;     // JSON of config.js as last applied, for change detection
+	var lastGoodConfig = null; // config.js as last successfully read (what "Reset" returns to)
 	var currentErrors = [];
+	var panelEls = {};         // panel id -> element
+	var nextId = 1;
+	var editing = false;
 
 	function isInt(v, min) {
 		return typeof v === "number" && isFinite(v) && Math.floor(v) === v && v >= min;
 	}
-
+	function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 	function px(value, fallback) {
 		if (typeof value === "number") return value + "px";
 		if (typeof value === "string" && value) return value;
 		return fallback + "px";
 	}
+	function catalogEntry(id) {
+		for (var i = 0; i < CATALOG.length; i++) if (CATALOG[i].id === id) return CATALOG[i];
+		return null;
+	}
+	function panelName(p) {
+		if (p.url) return "Web page";
+		if (p.widget === "empty") return "Empty panel";
+		var e = catalogEntry(p.widget);
+		return e ? e.name : p.widget;
+	}
 
-	function buildSrc(panel, config) {
+	function buildSrc(panel) {
 		var base = panel.url || ("../widgets/" + panel.widget + "/index.html");
 		var params = new URLSearchParams();
-		if (!panel.url && config.apiBase) params.set("apiBase", String(config.apiBase));
-		if (!panel.url && config.modApiBase) params.set("modApiBase", String(config.modApiBase));
+		if (!panel.url && layout.apiBase) params.set("apiBase", String(layout.apiBase));
+		if (!panel.url && layout.modApiBase) params.set("modApiBase", String(layout.modApiBase));
 		if (panel.params) {
 			Object.keys(panel.params).forEach(function (key) { params.set(key, String(panel.params[key])); });
 		}
@@ -107,12 +410,58 @@
 		return query ? base + (base.indexOf("?") >= 0 ? "&" : "?") + query : base;
 	}
 
-	// Checks the config and resolves every panel. Problems are collected as
-	// readable messages; panels with placement errors are skipped, the rest render.
-	function validate(config) {
-		var errors = [], panels = [];
+	// ---- placement helpers -------------------------------------------------
+
+	function overlaps(a, b) {
+		return a.col < b.col + b.colSpan && b.col < a.col + a.colSpan &&
+		       a.row < b.row + b.rowSpan && b.row < a.row + a.rowSpan;
+	}
+	// True when `rect` (col/row/colSpan/rowSpan) fits the grid and touches no
+	// panel in `panels` other than the one with `skipId`.
+	function fits(panels, rect, skipId) {
+		if (rect.col < 1 || rect.row < 1) return false;
+		if (rect.col + rect.colSpan - 1 > layout.grid.columns) return false;
+		if (rect.row + rect.rowSpan - 1 > layout.grid.rows) return false;
+		for (var i = 0; i < panels.length; i++) {
+			if (panels[i].id === skipId) continue;
+			if (overlaps(panels[i], rect)) return false;
+		}
+		return true;
+	}
+	// First free top-left cell for a colSpan x rowSpan rectangle, or null.
+	function findSpot(panels, colSpan, rowSpan, skipId) {
+		for (var r = 1; r + rowSpan - 1 <= layout.grid.rows; r++) {
+			for (var c = 1; c + colSpan - 1 <= layout.grid.columns; c++) {
+				var rect = { col: c, row: r, colSpan: colSpan, rowSpan: rowSpan };
+				if (fits(panels, rect, skipId)) return rect;
+			}
+		}
+		return null;
+	}
+	// The largest rectangle no bigger than colSpan x rowSpan that fits
+	// somewhere (by area, then closest to the wanted shape), down to 1 x 1.
+	function findSpotShrinking(panels, colSpan, rowSpan, skipId) {
+		var maxC = Math.min(colSpan, layout.grid.columns), maxR = Math.min(rowSpan, layout.grid.rows);
+		var sizes = [];
+		for (var cs = 1; cs <= maxC; cs++) for (var rs = 1; rs <= maxR; rs++) sizes.push({ cs: cs, rs: rs });
+		sizes.sort(function (a, b) {
+			return (b.cs * b.rs - a.cs * a.rs) || (Math.abs(a.cs / a.rs - colSpan / rowSpan) - Math.abs(b.cs / b.rs - colSpan / rowSpan));
+		});
+		for (var i = 0; i < sizes.length; i++) {
+			var spot = findSpot(panels, sizes[i].cs, sizes[i].rs, skipId);
+			if (spot) return spot;
+		}
+		return null;
+	}
+
+	// ---- config.js -> layout -----------------------------------------------
+
+	// Checks a config object and turns it into a live layout. Problems are
+	// collected as readable messages; panels with placement errors are skipped.
+	function normalize(config) {
+		var errors = [];
 		if (!config || typeof config !== "object" || Array.isArray(config)) {
-			return { errors: ["window.HUD_CONFIG must be an object"], panels: [], columns: 16, rows: 9 };
+			return { errors: ["window.HUD_CONFIG must be an object"], layout: freshLayout(16, 9) };
 		}
 		Object.keys(config).forEach(function (key) {
 			if (KNOWN_TOP.indexOf(key) < 0) errors.push('Unknown setting "' + key + '" (ignored). Known: ' + KNOWN_TOP.join(", "));
@@ -121,12 +470,16 @@
 		var columns = grid.columns, rows = grid.rows;
 		if (!isInt(columns, 1) || columns > 64) { errors.push("grid.columns must be a whole number from 1 to 64 (using 16)"); columns = 16; }
 		if (!isInt(rows, 1) || rows > 64) { errors.push("grid.rows must be a whole number from 1 to 64 (using 9)"); rows = 9; }
+		var out = freshLayout(columns, rows);
+		["gap", "padding", "radius", "background", "panelBackground", "apiBase", "modApiBase"].forEach(function (k) {
+			if (config[k] !== undefined) out[k] = config[k];
+		});
 		if (!Array.isArray(config.panels)) {
 			errors.push("panels must be an array of panel objects");
-			return { errors: errors, panels: [], columns: columns, rows: rows };
+			return { errors: errors, layout: out };
 		}
 
-		var occupied = {};   // "col,row" -> label of the panel already there
+		var placed = [], deferred = [];
 		config.panels.forEach(function (p, i) {
 			var label = "panels[" + i + "]";
 			if (!p || typeof p !== "object") { errors.push(label + " is not an object"); return; }
@@ -136,55 +489,192 @@
 				if (KNOWN_PANEL.indexOf(key) < 0) errors.push(label + ': unknown key "' + key + '" (ignored). Known: ' + KNOWN_PANEL.join(", "));
 			});
 
-			var widget = null, url = null;
+			var panel = { id: nextId++ };
 			if (typeof p.url === "string" && p.url) {
-				url = p.url;
+				panel.url = p.url;
 			} else if (typeof p.widget === "string" && /^[A-Za-z0-9_-]+$/.test(p.widget)) {
-				widget = p.widget;
+				panel.widget = p.widget;
 			} else {
 				errors.push(label + ': needs "widget" (a folder name under widgets/, e.g. "clock") or "url"');
 				return;
 			}
-
-			var colSpan = p.colSpan === undefined ? 1 : p.colSpan;
-			var rowSpan = p.rowSpan === undefined ? 1 : p.rowSpan;
-			if (!isInt(colSpan, 1)) { errors.push(label + ": colSpan must be a whole number >= 1"); return; }
-			if (!isInt(rowSpan, 1)) { errors.push(label + ": rowSpan must be a whole number >= 1"); return; }
-			if (colSpan > columns || rowSpan > rows) { errors.push(label + ": span " + colSpan + "x" + rowSpan + " does not fit a " + columns + "x" + rows + " grid"); return; }
-
-			var col = p.col, row = p.row;
-			if (col === undefined && row === undefined) {
-				col = null; row = null;    // auto-placed into the first free cells
-			} else {
-				if (!isInt(col, 1) || !isInt(row, 1)) { errors.push(label + ": col and row must both be whole numbers >= 1 (or both left out for auto placement)"); return; }
-				if (col + colSpan - 1 > columns) { errors.push(label + ": col " + col + " + colSpan " + colSpan + " runs past column " + columns); return; }
-				if (row + rowSpan - 1 > rows) { errors.push(label + ": row " + row + " + rowSpan " + rowSpan + " runs past row " + rows); return; }
-				var reported = {};
-				for (var c = col; c < col + colSpan; c++) {
-					for (var r = row; r < row + rowSpan; r++) {
-						var key = c + "," + r;
-						if (!occupied[key]) { occupied[key] = label; continue; }
-						if (reported[occupied[key]]) continue;
-						reported[occupied[key]] = true;
-						errors.push(label + " overlaps " + occupied[key] + " (first at column " + c + ", row " + r + ")");
-					}
-				}
-			}
+			panel.colSpan = p.colSpan === undefined ? 1 : p.colSpan;
+			panel.rowSpan = p.rowSpan === undefined ? 1 : p.rowSpan;
+			if (!isInt(panel.colSpan, 1)) { errors.push(label + ": colSpan must be a whole number >= 1"); return; }
+			if (!isInt(panel.rowSpan, 1)) { errors.push(label + ": rowSpan must be a whole number >= 1"); return; }
+			if (panel.colSpan > columns || panel.rowSpan > rows) { errors.push(label + ": span " + panel.colSpan + "x" + panel.rowSpan + " does not fit a " + columns + "x" + rows + " grid"); return; }
 			if (p.params !== undefined && (!p.params || typeof p.params !== "object" || Array.isArray(p.params))) {
 				errors.push(label + ": params must be an object like { zoomLevel: 2 }");
 				return;
 			}
+			panel.params = p.params ? JSON.parse(JSON.stringify(p.params)) : {};
+			if (typeof p.background === "string") panel.background = p.background;
+			panel.label = label;
 
-			panels.push({
-				label: label,
-				empty: widget === "empty",
-				src: widget === "empty" ? null : buildSrc({ widget: widget, url: url, params: p.params }, config),
-				col: col, row: row, colSpan: colSpan, rowSpan: rowSpan,
-				background: (typeof p.background === "string") ? p.background : null
-			});
+			if (p.col === undefined && p.row === undefined) { deferred.push(panel); return; }
+			if (!isInt(p.col, 1) || !isInt(p.row, 1)) { errors.push(label + ": col and row must both be whole numbers >= 1 (or both left out for auto placement)"); return; }
+			panel.col = p.col; panel.row = p.row;
+			if (panel.col + panel.colSpan - 1 > columns) { errors.push(label + ": col " + panel.col + " + colSpan " + panel.colSpan + " runs past column " + columns); return; }
+			if (panel.row + panel.rowSpan - 1 > rows) { errors.push(label + ": row " + panel.row + " + rowSpan " + panel.rowSpan + " runs past row " + rows); return; }
+			for (var j = 0; j < placed.length; j++) {
+				if (overlaps(placed[j], panel)) { errors.push(label + " overlaps " + placed[j].label + " – skipped"); return; }
+			}
+			placed.push(panel);
 		});
-		return { errors: errors, panels: panels, columns: columns, rows: rows };
+		out.panels = placed;
+		deferred.forEach(function (panel) {
+			var spot = findSpot(out.panels, panel.colSpan, panel.rowSpan);
+			if (!spot) { errors.push(panel.label + ": no free " + panel.colSpan + "x" + panel.rowSpan + " space left for auto placement"); return; }
+			panel.col = spot.col; panel.row = spot.row;
+			out.panels.push(panel);
+		});
+		out.panels.forEach(function (panel) { delete panel.label; });
+		return { errors: errors, layout: out };
 	}
+
+	function freshLayout(columns, rows) {
+		return { grid: { columns: columns, rows: rows }, gap: 8, padding: 8, radius: 10, background: "#000", panelBackground: "#101014",
+		         apiBase: "http://localhost:8080", modApiBase: "http://localhost:27421", panels: [] };
+	}
+
+	// The live layout without runtime ids, in config.js shape.
+	function exportLayout() {
+		var out = {
+			grid: { columns: layout.grid.columns, rows: layout.grid.rows },
+			gap: layout.gap, padding: layout.padding, radius: layout.radius,
+			background: layout.background, panelBackground: layout.panelBackground,
+			apiBase: layout.apiBase, modApiBase: layout.modApiBase,
+			panels: layout.panels.map(function (p) {
+				var o = {};
+				if (p.url) o.url = p.url; else o.widget = p.widget;
+				o.col = p.col; o.row = p.row; o.colSpan = p.colSpan; o.rowSpan = p.rowSpan;
+				if (p.params && Object.keys(p.params).length) o.params = p.params;
+				if (p.background) o.background = p.background;
+				return o;
+			})
+		};
+		return out;
+	}
+	function configJsText() {
+		return "// Minecraft HUD dashboard layout, exported from the on-screen editor.\n" +
+		       "// See dashboard/README.md. Saving this file as dashboard/config.js makes it\n" +
+		       "// the starting layout (\"Layout… → Reset to config.js\" loads it).\n\n" +
+		       "window.HUD_CONFIG = " + JSON.stringify(exportLayout(), null, "\t") + ";\n";
+	}
+
+	// ---- persistence -------------------------------------------------------
+
+	// The working layout is kept per screen size, so each monitor the
+	// dashboard is moved to remembers its own arrangement.
+	function screenKey() { return screen.width + "x" + screen.height; }
+	function workingKey() { return STORAGE_KEY + ":" + screenKey(); }
+	var activeName = null;      // name of the saved layout the working layout came from, if any
+	function loadSaved() {
+		try {
+			var raw = localStorage.getItem(workingKey()) || localStorage.getItem(STORAGE_KEY);
+			if (!raw) return null;
+			var cfg = JSON.parse(raw);
+			var n = normalize(cfg);
+			if (n.errors.length) console.warn("saved layout:", n.errors);
+			activeName = localStorage.getItem("hud.active:" + screenKey()) || null;
+			return n.layout;
+		} catch (e) { return null; }
+	}
+	function save() {
+		try { localStorage.setItem(workingKey(), JSON.stringify(exportLayout())); layoutSaved = true; }
+		catch (e) { toast("Could not save the layout (" + e.message + ")"); }
+	}
+	function setActiveName(name) {
+		activeName = name;
+		try { if (name) localStorage.setItem("hud.active:" + screenKey(), name); else localStorage.removeItem("hud.active:" + screenKey()); } catch (e) {}
+	}
+	function forgetSaved() {
+		try { localStorage.removeItem(workingKey()); localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+		layoutSaved = false;
+		setActiveName(null);
+	}
+
+	// ---- named layouts -----------------------------------------------------
+	// Saved as dashboard/layouts/<name>.json through the control service, with
+	// a mirror in localStorage so the list works when the service is down.
+	// A record is { name, savedAt, screen: { width, height, monitor }, layout }.
+
+	var MIRROR_KEY = "hud.layouts";
+	function mirrorRead() { try { return JSON.parse(localStorage.getItem(MIRROR_KEY) || "{}"); } catch (e) { return {}; } }
+	function mirrorWrite(all) { try { localStorage.setItem(MIRROR_KEY, JSON.stringify(all)); } catch (e) {} }
+	function mirrorList() {
+		var all = mirrorRead();
+		return Object.keys(all).map(function (k) { var r = all[k]; return { name: r.name, savedAt: r.savedAt, screen: r.screen, grid: r.layout && r.layout.grid, panels: r.layout ? r.layout.panels.length : 0 }; })
+			.sort(function (a, b) { return (b.savedAt || "").localeCompare(a.savedAt || ""); });
+	}
+	function controlFetch(path, options) {
+		return fetch(CONTROL_URL + path, Object.assign({ cache: "no-store" }, options || {})).then(function (r) {
+			return r.json().then(function (j) { if (!r.ok) throw new Error((j && j.error) || ("HTTP " + r.status)); return j; });
+		});
+	}
+	var layoutStore = {
+		// cb(list, source) where source is "files" or "browser"
+		list: function (cb) {
+			controlFetch("/layouts").then(function (j) { cb(j.layouts || [], "files"); }, function () { cb(mirrorList(), "browser"); });
+		},
+		get: function (name, cb) {
+			controlFetch("/layouts/" + encodeURIComponent(name)).then(function (rec) { cb(rec); }, function () {
+				var rec = mirrorRead()[name];
+				if (rec) cb(rec); else cb(null, "not found");
+			});
+		},
+		save: function (rec, cb) {
+			var all = mirrorRead(); all[rec.name] = rec; mirrorWrite(all);
+			controlFetch("/layouts/" + encodeURIComponent(rec.name), { method: "POST", body: JSON.stringify(rec, null, "\t") })
+				.then(function () { cb(true); }, function (e) { cb(false, e.message); });
+		},
+		remove: function (name, cb) {
+			var all = mirrorRead(); delete all[name]; mirrorWrite(all);
+			controlFetch("/layouts/" + encodeURIComponent(name) + "/delete", { method: "POST" }).then(function () { cb(true); }, function () { cb(false); });
+		}
+	};
+	var currentMonitor = null;   // from /monitors, when the service answers
+	function refreshCurrentMonitor() {
+		controlFetch("/monitors").then(function (j) {
+			var m = (j.monitors || []).filter(function (x) { return x.current; })[0];
+			currentMonitor = m ? { name: m.name, index: m.index, width: m.width, height: m.height } : null;
+		}, function () {});
+	}
+	function defaultLayoutName() {
+		var d = new Date(), p = function (n) { return (n < 10 ? "0" : "") + n; };
+		return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + "-" + p(d.getMinutes());
+	}
+	function validLayoutName(name) { return /^[\w .()\-]{1,60}$/.test(name) && !/^\.+$/.test(name); }
+	function saveLayoutAs(name, cb) {
+		var rec = {
+			name: name, savedAt: new Date().toISOString(),
+			screen: { width: screen.width, height: screen.height, monitor: currentMonitor ? currentMonitor.name : null, label: currentMonitor ? ("monitor " + currentMonitor.index) : null },
+			layout: exportLayout()
+		};
+		layoutStore.save(rec, function (ok, err) {
+			setActiveName(name);
+			if (ok) toast('Saved "' + name + '"');
+			else toast('Saved "' + name + '" in the browser only (control service not running' + (err ? ": " + err : "") + ")");
+			if (cb) cb();
+		});
+	}
+	function loadLayoutByName(name) {
+		layoutStore.get(name, function (rec, err) {
+			if (!rec || !rec.layout) { toast("Could not load " + name + (err ? " (" + err + ")" : "")); return; }
+			var n = normalize(rec.layout);
+			if (!n.layout.panels.length) { toast("That layout has no usable panels"); return; }
+			layout = n.layout;
+			panelEls = {}; document.getElementById("grid").innerHTML = "";
+			render();
+			save();
+			setActiveName(name);
+			if (editing) editStartJson = JSON.stringify(exportLayout());   // loading is not an unsaved change
+			var s = rec.screen;
+			toast('Loaded "' + name + '"' + (s && (s.width !== screen.width || s.height !== screen.height) ? " (made for " + s.width + " × " + s.height + ", scaled to this screen)" : ""));
+		});
+	}
+
+	// ---- rendering ---------------------------------------------------------
 
 	function showErrors(list) {
 		var el = document.getElementById("errors");
@@ -193,42 +683,657 @@
 		el.textContent = "dashboard/config.js:\n" + list.map(function (e) { return "• " + e; }).join("\n");
 	}
 
-	function apply(config, extraErrors) {
-		var v = validate(config);
+	function applyGridStyle() {
 		var grid = document.getElementById("grid");
-		grid.style.gridTemplateColumns = "repeat(" + v.columns + ", minmax(0, 1fr))";
-		grid.style.gridTemplateRows = "repeat(" + v.rows + ", minmax(0, 1fr))";
-		grid.style.gap = px(config.gap, 8);
-		grid.style.padding = px(config.padding, 8);
-		document.body.style.background = (typeof config.background === "string" && config.background) ? config.background : "#000";
-		var panelBackground = (typeof config.panelBackground === "string" && config.panelBackground) ? config.panelBackground : "#101014";
+		grid.style.gridTemplateColumns = "repeat(" + layout.grid.columns + ", minmax(0, 1fr))";
+		grid.style.gridTemplateRows = "repeat(" + layout.grid.rows + ", minmax(0, 1fr))";
+		grid.style.gap = px(layout.gap, 8);
+		grid.style.padding = px(layout.padding, 8);
+		document.body.style.background = (typeof layout.background === "string" && layout.background) ? layout.background : "#000";
+		updateGridLines();
+	}
+	function panelBackground() {
+		return (typeof layout.panelBackground === "string" && layout.panelBackground) ? layout.panelBackground : "#101014";
+	}
+	function placePanel(el, p) {
+		el.style.gridColumn = p.col + " / span " + p.colSpan;
+		el.style.gridRow = p.row + " / span " + p.rowSpan;
+	}
 
-		grid.innerHTML = "";
-		v.panels.forEach(function (p) {
-			var el = document.createElement("div");
-			el.className = "panel";
-			el.style.borderRadius = px(config.radius, 10);
-			el.style.background = p.background || panelBackground;
-			el.style.gridColumn = (p.col ? p.col + " / " : "") + "span " + p.colSpan;
-			el.style.gridRow = (p.row ? p.row + " / " : "") + "span " + p.rowSpan;
-			if (!p.empty) {
-				var frame = document.createElement("iframe");
-				frame.src = p.src;
-				frame.style.background = el.style.background;
-				el.appendChild(frame);
+	// Creates, updates and removes panel elements to match the layout. Panels
+	// that only moved keep their iframe (no reload); a changed src reloads it.
+	function render() {
+		applyGridStyle();
+		var grid = document.getElementById("grid");
+		var seen = {};
+		layout.panels.forEach(function (p) {
+			seen[p.id] = true;
+			var el = panelEls[p.id];
+			if (!el) {
+				el = createPanelElement(p);
+				panelEls[p.id] = el;
+				grid.appendChild(el);
 			}
-			grid.appendChild(el);
+			el.style.borderRadius = px(layout.radius, 10);
+			el.style.background = p.background || panelBackground();
+			placePanel(el, p);
+			el.querySelector(".titlebar .name").textContent = panelName(p);
+			var frame = el.querySelector("iframe");
+			var src = (p.widget === "empty") ? null : buildSrc(p);
+			if (src && !frame) {
+				frame = document.createElement("iframe");
+				el.insertBefore(frame, el.firstChild);
+			}
+			if (frame) {
+				frame.style.background = el.style.background;
+				if (!src) frame.remove();
+				else if (frame.getAttribute("src") !== src) frame.setAttribute("src", src);
+			}
 		});
+		Object.keys(panelEls).forEach(function (id) {
+			if (!seen[id]) { panelEls[id].remove(); delete panelEls[id]; }
+		});
+	}
 
-		current = config;
-		currentJson = JSON.stringify(config);
-		currentErrors = v.errors;
+	function createPanelElement(p) {
+		var el = document.createElement("div");
+		el.className = "panel";
+		el.dataset.id = p.id;
+		el.innerHTML =
+			'<div class="cover"></div>' +
+			'<div class="titlebar"><span class="name"></span>' +
+			'<button class="settings" title="Settings">⚙</button>' +
+			'<button class="remove" title="Remove">✕</button></div>' +
+			'<div class="resize"></div>';
+		el.querySelector(".cover").addEventListener("pointerdown", function (e) { startDrag(e, p.id, "move"); });
+		el.querySelector(".resize").addEventListener("pointerdown", function (e) { startDrag(e, p.id, "resize"); });
+		el.querySelector(".settings").addEventListener("click", function () { openPanelSettings(p.id); });
+		el.querySelector(".remove").addEventListener("click", function () { confirmRemove(p.id); });
+		return el;
+	}
+
+	function getPanel(id) {
+		for (var i = 0; i < layout.panels.length; i++) if (layout.panels[i].id === id) return layout.panels[i];
+		return null;
+	}
+
+	// Cell pitch in pixels (cell + gap), read from the rendered grid so it is
+	// right for whatever screen the page is on.
+	function cellMetrics() {
+		var grid = document.getElementById("grid");
+		var cs = getComputedStyle(grid);
+		var padL = parseFloat(cs.paddingLeft) || 0, padR = parseFloat(cs.paddingRight) || 0;
+		var padT = parseFloat(cs.paddingTop) || 0, padB = parseFloat(cs.paddingBottom) || 0;
+		var gapX = parseFloat(cs.columnGap) || 0, gapY = parseFloat(cs.rowGap) || 0;
+		var w = grid.clientWidth - padL - padR, h = grid.clientHeight - padT - padB;
+		var cellW = (w - gapX * (layout.grid.columns - 1)) / layout.grid.columns;
+		var cellH = (h - gapY * (layout.grid.rows - 1)) / layout.grid.rows;
+		return { stepX: cellW + gapX, stepY: cellH + gapY, cellW: cellW, cellH: cellH, gapX: gapX, gapY: gapY, pad: padL };
+	}
+	function updateGridLines() {
+		var grid = document.getElementById("grid");
+		if (!editing) return;
+		var m = cellMetrics();
+		grid.style.setProperty("--cell-w", m.stepX + "px");
+		grid.style.setProperty("--cell-h", m.stepY + "px");
+		grid.style.setProperty("--gap", m.gapX + "px");
+		grid.style.setProperty("--pad", px(layout.padding, 8));
+	}
+	window.addEventListener("resize", updateGridLines);
+
+	// ---- drag to move / resize ---------------------------------------------
+
+	var drag = null;
+	function startDrag(e, id, mode) {
+		if (!editing || drag) return;
+		var p = getPanel(id);
+		if (!p) return;
+		e.preventDefault();
+		var el = panelEls[id];
+		drag = {
+			id: id, mode: mode, pointerId: e.pointerId, el: el,
+			startX: e.clientX, startY: e.clientY, metrics: cellMetrics(),
+			start: { col: p.col, row: p.row, colSpan: p.colSpan, rowSpan: p.rowSpan },
+			lastValid: { col: p.col, row: p.row, colSpan: p.colSpan, rowSpan: p.rowSpan }
+		};
+		el.classList.add("dragging");
+		var target = mode === "move" ? el.querySelector(".cover") : el.querySelector(".resize");
+		target.setPointerCapture && target.setPointerCapture(e.pointerId);
+		target.addEventListener("pointermove", onDragMove);
+		target.addEventListener("pointerup", endDrag);
+		target.addEventListener("pointercancel", endDrag);
+		drag.target = target;
+	}
+	function onDragMove(e) {
+		if (!drag || e.pointerId !== drag.pointerId) return;
+		var p = getPanel(drag.id);
+		var dc = Math.round((e.clientX - drag.startX) / drag.metrics.stepX);
+		var dr = Math.round((e.clientY - drag.startY) / drag.metrics.stepY);
+		var rect;
+		if (drag.mode === "move") {
+			rect = {
+				col: clamp(drag.start.col + dc, 1, layout.grid.columns - p.colSpan + 1),
+				row: clamp(drag.start.row + dr, 1, layout.grid.rows - p.rowSpan + 1),
+				colSpan: p.colSpan, rowSpan: p.rowSpan
+			};
+		} else {
+			rect = {
+				col: p.col, row: p.row,
+				colSpan: clamp(drag.start.colSpan + dc, 1, layout.grid.columns - p.col + 1),
+				rowSpan: clamp(drag.start.rowSpan + dr, 1, layout.grid.rows - p.row + 1)
+			};
+		}
+		var ok = fits(layout.panels, rect, p.id);
+		drag.el.classList.toggle("invalid", !ok);
+		if (ok) drag.lastValid = rect;
+		placePanel(drag.el, rect);
+	}
+	function endDrag(e) {
+		if (!drag || e.pointerId !== drag.pointerId) return;
+		var p = getPanel(drag.id);
+		var t = drag.target;
+		t.removeEventListener("pointermove", onDragMove);
+		t.removeEventListener("pointerup", endDrag);
+		t.removeEventListener("pointercancel", endDrag);
+		drag.el.classList.remove("dragging", "invalid");
+		var v = drag.lastValid;
+		var changed = v.col !== p.col || v.row !== p.row || v.colSpan !== p.colSpan || v.rowSpan !== p.rowSpan;
+		p.col = v.col; p.row = v.row; p.colSpan = v.colSpan; p.rowSpan = v.rowSpan;
+		placePanel(drag.el, p);
+		drag = null;
+		if (changed) save();
+	}
+
+	// ---- edit mode ---------------------------------------------------------
+
+	var editStartJson = null;   // the layout when edit mode began, to notice changes on Done
+	function setEditing(on) {
+		editing = on;
+		document.body.classList.toggle("editing", on);
+		updateGridLines();
+		if (on) { editStartJson = JSON.stringify(exportLayout()); refreshCurrentMonitor(); }
+	}
+	function layoutChanged() { return editStartJson !== null && JSON.stringify(exportLayout()) !== editStartJson; }
+	// Done: when something changed, offer to keep it as a named layout. The
+	// working layout is saved either way; this is about the list under Screen.
+	function finishEditing() {
+		closeModal();
+		if (!layoutChanged()) { setEditing(false); return; }
+		openSaveDialog(function () { setEditing(false); });
+	}
+	function openSaveDialog(done) {
+		var suggested = activeName || defaultLayoutName();
+		var d = openModal("<h2>Save this layout?</h2><p>" + (activeName ? 'You changed "' + esc(activeName) + '". Save under the same name to update it, or under a new name to keep both.' : "Give it a name to find it again under Screen → Saved layouts, on this or any other monitor.") + "</p>" +
+			fieldHtml({ name: "__name", label: "Name", type: "text", default: "", help: "letters, digits, spaces, - _ . ( )" }, suggested) +
+			'<div class="actions"><button class="btn ghost" data-close>Don\'t save</button><button class="btn primary" data-ok>Save</button></div>');
+		var input = d.querySelector('[data-name="__name"]');
+		input.focus(); input.select();
+		d.querySelector("[data-close]").addEventListener("click", function () { closeModal(); if (done) done(); });
+		var commit = function () {
+			var name = input.value.trim();
+			if (!validLayoutName(name)) { toast("Name: 1-60 letters, digits, spaces, - _ . ( )"); return; }
+			var go = function () { closeModal(); saveLayoutAs(name, done); };
+			if (name === activeName) { go(); return; }
+			layoutStore.list(function (list) {
+				if (!list.some(function (l) { return l.name === name; })) { go(); return; }
+				var c = openModal('<h2>Replace "' + esc(name) + '"?</h2><p>A layout with that name exists.</p>' +
+					'<div class="actions"><button class="btn ghost" data-close>Back</button><button class="btn danger" data-ok>Replace</button></div>');
+				c.querySelector("[data-close]").addEventListener("click", function () { openSaveDialog(done); });
+				c.querySelector("[data-ok]").addEventListener("click", go);
+			});
+		};
+		d.querySelector("[data-ok]").addEventListener("click", commit);
+		input.addEventListener("keydown", function (e) { if (e.key === "Enter") commit(); });
+	}
+	document.getElementById("gear").addEventListener("click", function () { setEditing(true); });
+	document.getElementById("btnDone").addEventListener("click", finishEditing);
+	document.getElementById("btnAdd").addEventListener("click", openAddMenu);
+	document.getElementById("btnScreen").addEventListener("click", openScreenSettings);
+	document.getElementById("btnLayout").addEventListener("click", openLayoutMenu);
+	document.addEventListener("contextmenu", function (e) { e.preventDefault(); });   // long press on a touchscreen
+	document.addEventListener("keydown", function (e) {
+		if (e.key === "Escape") { if (modalOpen()) closeModal(); else if (editing) finishEditing(); }
+	});
+
+	var toastTimer = null;
+	function toast(text) {
+		var el = document.getElementById("toast");
+		el.textContent = text;
+		el.className = "show";
+		clearTimeout(toastTimer);
+		toastTimer = setTimeout(function () { el.className = ""; }, 2600);
+	}
+
+	// ---- dialogs -----------------------------------------------------------
+
+	function modalOpen() { return document.getElementById("modal").className === "show"; }
+	function openModal(html, kind) {
+		var m = document.getElementById("modal");
+		m.innerHTML = '<div class="dialog' + (kind === true ? " wide" : kind ? " " + kind : "") + '">' + html + "</div>";
+		m.className = "show";
+		return m.querySelector(".dialog");
+	}
+	function closeModal() {
+		var m = document.getElementById("modal");
+		m.className = "";
+		m.innerHTML = "";
+	}
+	document.getElementById("modal").addEventListener("click", function (e) { if (e.target.id === "modal") closeModal(); });
+	function esc(s) {
+		return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; });
+	}
+
+	var addMenuTab = null;   // the category tab last used
+	function openAddMenu() {
+		// One tab per category so the list fits a short screen without scrolling.
+		var html = "<h2>Add a widget</h2>";
+		var cats = (Array.isArray(window.HUD_CATEGORIES) ? window.HUD_CATEGORIES : []).slice();
+		cats.push({ id: "__other", name: "Other", description: "web pages and blank panels" });
+		var panes = "", tabs = "";
+		cats.forEach(function (c, i) {
+			var items = CATALOG.filter(function (w) {
+				var known = cats.some(function (x) { return x.id === w.category; });
+				return c.id === "__other" ? !known : w.category === c.id;
+			});
+			var extra = c.id === "__other"
+				? '<button data-widget="__url"><b>Web page</b><span>Any page by URL (local file or https).</span></button>' +
+				  '<button data-widget="__empty"><b>Empty panel</b><span>A blank panel to reserve space.</span></button>'
+				: "";
+			if (!items.length && !extra) return;
+			var active = addMenuTab ? addMenuTab === c.id : !tabs;
+			if (active) addMenuTab = c.id;
+			tabs += '<button class="tab' + (active ? " active" : "") + '" data-tab="' + esc(c.id) + '">' + esc(c.name) + "</button>";
+			panes += '<div class="pane" data-pane="' + esc(c.id) + '"' + (active ? "" : ' style="display:none"') + '>' +
+				(c.description ? '<div class="note" style="margin-bottom:8px">' + esc(c.description) + "</div>" : "") + '<div class="catalog">';
+			items.forEach(function (w) {
+				panes += '<button data-widget="' + esc(w.id) + '"><b>' + esc(w.name) + "</b><span>" + esc(w.description || "") + "</span></button>";
+			});
+			panes += extra + "</div></div>";
+		});
+		html += '<div class="tabs">' + tabs + "</div>" + panes;
+		html += '<div class="actions"><button class="btn ghost" data-close>Cancel</button></div>';
+		var d = openModal(html, true);
+		d.querySelector("[data-close]").addEventListener("click", closeModal);
+		d.querySelectorAll(".tab").forEach(function (t) {
+			t.addEventListener("click", function () {
+				addMenuTab = t.dataset.tab;
+				d.querySelectorAll(".tab").forEach(function (x) { x.classList.toggle("active", x === t); });
+				d.querySelectorAll(".pane").forEach(function (x) { x.style.display = x.dataset.pane === addMenuTab ? "" : "none"; });
+			});
+		});
+		d.querySelectorAll(".catalog button").forEach(function (b) {
+			b.addEventListener("click", function () { addWidget(b.dataset.widget); });
+		});
+	}
+
+	function addWidget(kind) {
+		var p = { id: nextId++, params: {} };
+		var size = { colSpan: 3, rowSpan: 3 };
+		if (kind === "__url") { p.url = "https://"; }
+		else if (kind === "__empty") { p.widget = "empty"; }
+		else {
+			p.widget = kind;
+			var entry = catalogEntry(kind);
+			if (entry && entry.size) size = entry.size;
+		}
+		var spot = findSpotShrinking(layout.panels, size.colSpan, size.rowSpan);
+		if (!spot) { toast("No free space – remove or shrink a panel first"); return; }
+		p.col = spot.col; p.row = spot.row; p.colSpan = spot.colSpan; p.rowSpan = spot.rowSpan;
+		closeModal();
+		if (p.url) { openPanelSettings(p, true); return; }   // a URL panel needs its address first
+		layout.panels.push(p);
+		render();
+		save();
+		if (spot.colSpan < size.colSpan || spot.rowSpan < size.rowSpan) toast("Added smaller than usual – only " + spot.colSpan + "×" + spot.rowSpan + " cells were free");
+	}
+
+	function confirmRemove(id) {
+		var p = getPanel(id);
+		if (!p) return;
+		var d = openModal("<h2>Remove " + esc(panelName(p)) + "?</h2><p>Its settings are lost; you can add it again from the menu.</p>" +
+			'<div class="actions"><button class="btn ghost" data-close>Keep</button><button class="btn danger" data-ok>Remove</button></div>');
+		d.querySelector("[data-close]").addEventListener("click", closeModal);
+		d.querySelector("[data-ok]").addEventListener("click", function () {
+			layout.panels = layout.panels.filter(function (x) { return x.id !== id; });
+			closeModal();
+			render();
+			save();
+		});
+	}
+
+	// One form field per catalog param; returns HTML.
+	function fieldHtml(def, value) {
+		var id = "f_" + def.name;
+		var html = '<div class="field"><label for="' + id + '">' + esc(def.label) + "</label>";
+		var v = value === undefined ? def.default : value;
+		if (def.type === "bool") {
+			var on = !(v === false || v === 0 || v === "0" || v === "false" || v === "no" || v === "" || v === undefined);
+			html += '<span class="switch"><input type="checkbox" id="' + id + '" data-name="' + esc(def.name) + '"' + (on ? " checked" : "") + "></span>";
+		} else if (def.type === "select") {
+			html += '<select id="' + id + '" data-name="' + esc(def.name) + '">';
+			(def.options || []).forEach(function (o) {
+				var ov = (o && typeof o === "object") ? o.value : o;
+				var ol = (o && typeof o === "object") ? o.label : o;
+				html += '<option value="' + esc(ov) + '"' + (String(ov) === String(v) ? " selected" : "") + ">" + esc(ol) + "</option>";
+			});
+			html += "</select>";
+		} else if (def.type === "number") {
+			html += '<input type="number" id="' + id + '" data-name="' + esc(def.name) + '" value="' + esc(v === undefined ? "" : v) + '"' +
+				(def.min !== undefined ? ' min="' + def.min + '"' : "") + (def.max !== undefined ? ' max="' + def.max + '"' : "") +
+				(def.step !== undefined ? ' step="' + def.step + '"' : "") + ">";
+		} else if (def.multiline) {
+			html += '<textarea id="' + id + '" data-name="' + esc(def.name) + '">' + esc(v === undefined ? "" : v) + "</textarea>";
+		} else {
+			html += '<input type="text" id="' + id + '" data-name="' + esc(def.name) + '" value="' + esc(v === undefined ? "" : v) + '">';
+		}
+		if (def.help) html += '<div class="help">' + esc(def.help) + "</div>";
+		return html + "</div>";
+	}
+	// Reads a form field back; returns undefined when it equals the default.
+	function fieldValue(def, dialog) {
+		var input = dialog.querySelector('[data-name="' + def.name + '"]');
+		if (!input) return undefined;
+		var v;
+		if (def.type === "bool") v = input.checked;
+		else if (def.type === "number") { v = input.value === "" ? def.default : parseFloat(input.value); if (isNaN(v)) v = def.default; }
+		else if (def.type === "select") { v = input.value; if (typeof def.default === "number" && !isNaN(parseFloat(v))) v = parseFloat(v); }
+		else v = input.value;
+		if (String(v) === String(def.default)) return undefined;
+		return v;
+	}
+
+	// `panel` is a panel id, or for a brand-new panel (isNew) the panel object
+	// itself, which joins the layout only when the dialog is confirmed.
+	function openPanelSettings(panel, isNew) {
+		var p = isNew ? panel : getPanel(panel);
+		if (!p) return;
+		var defs = [];
+		if (p.url) defs.push({ name: "url", label: "Address", type: "text", default: "", help: "file:///C:/… or https://…; pages that refuse to be embedded stay blank" });
+		else if (p.widget !== "empty") {
+			var entry = catalogEntry(p.widget);
+			defs = (entry ? entry.params : []).concat(COMMON_PARAMS);
+		}
+		var html = "<h2>" + esc(panelName(p)) + "</h2>";
+		if (!defs.length) html += "<p>This panel has no settings.</p>";
+		html += '<div class="fields">';
+		defs.forEach(function (def) { html += fieldHtml(def, def.name === "url" ? p.url : p.params[def.name]); });
+		// Keep settings the catalog does not know about (hand-written in config.js) editable as text.
+		var extra = Object.keys(p.params || {}).filter(function (k) { return !defs.some(function (d) { return d.name === k; }); });
+		extra.forEach(function (k) { html += fieldHtml({ name: k, label: k, type: "text", default: "" }, p.params[k]); });
+		html += '<div class="section">Size</div>' +
+			fieldHtml({ name: "__colSpan", label: "Width (cells)", type: "number", min: 1, max: layout.grid.columns, step: 1, default: 1 }, p.colSpan) +
+			fieldHtml({ name: "__rowSpan", label: "Height (cells)", type: "number", min: 1, max: layout.grid.rows, step: 1, default: 1 }, p.rowSpan);
+		html += "</div>";
+		html += '<div class="actions"><button class="btn ghost" data-close>' + (isNew ? "Discard" : "Cancel") + '</button><button class="btn primary" data-ok>' + (isNew ? "Add" : "Apply") + "</button></div>";
+		var d = openModal(html, "form");
+		d.querySelector("[data-close]").addEventListener("click", closeModal);
+		d.querySelector("[data-ok]").addEventListener("click", function () {
+			var params = {};
+			defs.concat(extra.map(function (k) { return { name: k, type: "text", default: "" }; })).forEach(function (def) {
+				var v = fieldValue(def, d);
+				if (def.name === "url") { p.url = (v === undefined ? "" : String(v)).trim(); return; }
+				if (v !== undefined) params[def.name] = v;
+			});
+			if (p.url !== undefined && !p.url) { toast("Enter an address"); return; }
+			p.params = params;
+			var cs = clamp(parseInt(d.querySelector('[data-name="__colSpan"]').value, 10) || p.colSpan, 1, layout.grid.columns);
+			var rs = clamp(parseInt(d.querySelector('[data-name="__rowSpan"]').value, 10) || p.rowSpan, 1, layout.grid.rows);
+			if (cs !== p.colSpan || rs !== p.rowSpan) {
+				var rect = { col: p.col, row: p.row, colSpan: cs, rowSpan: rs };
+				if (!fits(layout.panels, rect, p.id)) {
+					var spot = findSpot(layout.panels, cs, rs, p.id);
+					if (!spot) { toast("No room for " + cs + "×" + rs + " cells – size unchanged"); cs = p.colSpan; rs = p.rowSpan; }
+					else { p.col = spot.col; p.row = spot.row; }
+				}
+				p.colSpan = cs; p.rowSpan = rs;
+			}
+			if (isNew) layout.panels.push(p);
+			closeModal();
+			render();
+			save();
+		});
+	}
+
+	function openScreenSettings() {
+		var html = "<h2>Screen</h2>";
+		html += '<div class="twocol">';
+		// left: monitors, saved layouts
+		html += '<div><div class="section">Monitor</div><div class="monitors"><span class="note">Looking for monitors…</span></div>' +
+			'<div class="section">Saved layouts</div><div class="layouts"><span class="note">Loading…</span></div></div>';
+		// right: grid and look, data sources
+		html += '<div class="compact"><div class="section">Grid · ' + screen.width + " × " + screen.height + " px, panels snap to cells; changing the grid rescales them</div>";
+		html += fieldHtml({ name: "columns", label: "Columns", type: "number", min: 1, max: 64, step: 1, default: 16 }, layout.grid.columns);
+		html += fieldHtml({ name: "rows", label: "Rows", type: "number", min: 1, max: 64, step: 1, default: 9 }, layout.grid.rows);
+		html += fieldHtml({ name: "gap", label: "Gap between panels (px)", type: "number", min: 0, max: 100, step: 1, default: 8 }, typeof layout.gap === "number" ? layout.gap : 8);
+		html += fieldHtml({ name: "padding", label: "Screen edge (px)", type: "number", min: 0, max: 200, step: 1, default: 8 }, typeof layout.padding === "number" ? layout.padding : 8);
+		html += fieldHtml({ name: "radius", label: "Corner radius (px)", type: "number", min: 0, max: 100, step: 1, default: 10 }, typeof layout.radius === "number" ? layout.radius : 10);
+		html += fieldHtml({ name: "background", label: "Screen color", type: "text", default: "#000" }, layout.background);
+		html += fieldHtml({ name: "panelBackground", label: "Panel color", type: "text", default: "#101014" }, layout.panelBackground);
+		html += '<div class="section">Data sources</div>';
+		html += fieldHtml({ name: "apiBase", label: "JourneyMap webmap", type: "text", default: "http://localhost:8080" }, layout.apiBase).replace('class="field"', 'class="field wide"');
+		html += fieldHtml({ name: "modApiBase", label: "iCUE HUD Bridge mod", type: "text", default: "http://localhost:27421" }, layout.modApiBase).replace('class="field"', 'class="field wide"');
+		html += '<div class="actions"><button class="btn ghost" data-close>Cancel</button><button class="btn primary" data-ok>Apply</button></div>';
+		html += "</div></div>";
+		var d = openModal(html, "screen");
+		loadLayoutList(d.querySelector(".layouts"));
+		loadMonitors(d.querySelector(".monitors"));
+		d.querySelector("[data-close]").addEventListener("click", closeModal);
+		d.querySelector("[data-ok]").addEventListener("click", function () {
+			function num(name, fallback, lo, hi) { var v = parseFloat(d.querySelector('[data-name="' + name + '"]').value); return isNaN(v) ? fallback : clamp(v, lo, hi); }
+			function str(name, fallback) { var v = d.querySelector('[data-name="' + name + '"]').value.trim(); return v || fallback; }
+			var columns = Math.round(num("columns", layout.grid.columns, 1, 64));
+			var rows = Math.round(num("rows", layout.grid.rows, 1, 64));
+			layout.gap = num("gap", 8, 0, 100);
+			layout.padding = num("padding", 8, 0, 200);
+			layout.radius = num("radius", 10, 0, 100);
+			layout.background = str("background", "#000");
+			layout.panelBackground = str("panelBackground", "#101014");
+			layout.apiBase = str("apiBase", "http://localhost:8080");
+			layout.modApiBase = str("modApiBase", "http://localhost:27421");
+			var dropped = regrid(columns, rows);
+			closeModal();
+			render();
+			save();
+			if (dropped.length) toast("No room on the new grid for: " + dropped.join(", "));
+		});
+	}
+
+	// The saved-layouts list in the Screen dialog: this screen's layouts first.
+	function loadLayoutList(box) {
+		layoutStore.list(function (list, source) {
+			var mine = list.filter(function (l) { return l.screen && l.screen.width === screen.width && l.screen.height === screen.height; });
+			var others = list.filter(function (l) { return mine.indexOf(l) < 0; });
+			var html = '<div class="stack">';
+			if (!list.length) html += '<span class="note">None yet. Arrange the screen and tap Done, or "Save current as…".</span>';
+			mine.concat(others).forEach(function (l) {
+				var isMine = mine.indexOf(l) >= 0, s = l.screen || {};
+				var tag = isMine ? "this monitor" : (s.width ? s.width + " × " + s.height : "unknown screen");
+				if (s.label && !isMine) tag += " (" + s.label + ")";
+				var when = l.savedAt ? new Date(l.savedAt).toLocaleDateString() : "";
+				html += '<div class="row' + (l.name === activeName ? " active" : "") + '"><button data-load="' + esc(l.name) + '"><b>' + esc(l.name) + "</b><span>" +
+					esc(tag) + (l.grid ? " · " + l.grid.columns + "×" + l.grid.rows : "") + (l.panels ? " · " + l.panels + " panels" : "") + (when ? " · " + esc(when) : "") + "</span></button>" +
+					'<button class="x" data-del="' + esc(l.name) + '" title="Delete">✕</button></div>';
+			});
+			html += "</div>";
+			html += '<div class="actions" style="justify-content:flex-start; margin-top:8px; align-items:center"><button class="btn" data-save-as>Save current as…</button>' +
+				'<span class="note">' + (source === "files" ? "files in dashboard\\layouts\\" : "control service not running – kept in the browser only") + "</span></div>";
+			box.innerHTML = html;
+			box.querySelector("[data-save-as]").addEventListener("click", function () { openSaveDialog(function () { openScreenSettings(); }); });
+			box.querySelectorAll("[data-load]").forEach(function (b) {
+				b.addEventListener("click", function () {
+					var name = b.dataset.load;
+					var c = openModal('<h2>Load "' + esc(name) + '"?</h2><p>It replaces what is on the screen now' + (layoutChanged() ? " – your unsaved changes are lost" : "") + ".</p>" +
+						'<div class="actions"><button class="btn ghost" data-close>Cancel</button><button class="btn primary" data-ok>Load</button></div>');
+					c.querySelector("[data-close]").addEventListener("click", function () { openScreenSettings(); });
+					c.querySelector("[data-ok]").addEventListener("click", function () { closeModal(); loadLayoutByName(name); });
+				});
+			});
+			box.querySelectorAll("[data-del]").forEach(function (b) {
+				b.addEventListener("click", function () {
+					var name = b.dataset.del;
+					var c = openModal('<h2>Delete "' + esc(name) + '"?</h2><p>The file is removed. What is on the screen stays as it is.</p>' +
+						'<div class="actions"><button class="btn ghost" data-close>Keep</button><button class="btn danger" data-ok>Delete</button></div>');
+					c.querySelector("[data-close]").addEventListener("click", function () { openScreenSettings(); });
+					c.querySelector("[data-ok]").addEventListener("click", function () {
+						layoutStore.remove(name, function () { if (activeName === name) setActiveName(null); openScreenSettings(); });
+					});
+				});
+			});
+		});
+	}
+
+	// Monitors come from scripts/dashboard-control.ps1, which start-dashboard.ps1
+	// runs alongside the kiosk; moving means it reopens the browser there.
+	function loadMonitors(box) {
+		fetch(CONTROL_URL + "/monitors", { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (data) {
+			var list = (data && data.monitors) || [];
+			if (!list.length) { box.innerHTML = '<span class="note">No monitors reported.</span>'; return; }
+			var html = '<div class="stack">';
+			list.forEach(function (m) {
+				var tags = [];
+				if (m.current) tags.push("showing the dashboard");
+				if (m.edge) tags.push("32:9 – Xeneon Edge");
+				if (m.primary) tags.push("primary");
+				html += '<div class="row' + (m.current ? " active" : "") + '"><button data-monitor="' + m.index + '"' + (m.current ? " disabled" : "") + "><b>" + m.index + ": " + m.width + " × " + m.height + "</b><span>" +
+					esc(tags.join(" · ") || "at " + m.x + ", " + m.y) + (m.current ? "" : " – tap to move the dashboard here") + "</span></button></div>";
+			});
+			html += "</div>";
+			box.innerHTML = html;
+			box.querySelectorAll("[data-monitor]").forEach(function (b) {
+				b.addEventListener("click", function () {
+					var n = parseInt(b.dataset.monitor, 10);
+					var c = openModal("<h2>Move to monitor " + n + "?</h2><p>The dashboard closes and reopens on that monitor in a few seconds, and opens there from now on. The layout is kept.</p>" +
+						'<div class="actions"><button class="btn ghost" data-close>Stay</button><button class="btn primary" data-ok>Move</button></div>');
+					c.querySelector("[data-close]").addEventListener("click", closeModal);
+					c.querySelector("[data-ok]").addEventListener("click", function () {
+						fetch(CONTROL_URL + "/move?monitor=" + n, { method: "POST" }).then(function (r) { return r.json(); }).then(function (res) {
+							if (res && res.ok) { closeModal(); toast("Moving to monitor " + n + "…"); }
+							else toast("Could not move: " + ((res && res.error) || "unknown error"));
+						}).catch(function (e) { toast("Could not reach the dashboard control service (" + e.message + ")"); });
+					});
+				});
+			});
+		}).catch(function () {
+			box.innerHTML = '<span class="note">Not available: the dashboard control service is not running. Start the dashboard with <code>scripts\\start-dashboard.ps1</code> (it starts the service), ' +
+				'or run <code>scripts\\start-dashboard.ps1 -ListMonitors</code> and <code>-Monitor &lt;n&gt; -Remember</code> by hand.</span>';
+		});
+	}
+
+	// Changes the grid size, scaling every panel proportionally. Panels that
+	// end up overlapping are moved to free space; returns the names of any
+	// that had to be dropped.
+	function regrid(columns, rows) {
+		var fx = columns / layout.grid.columns, fy = rows / layout.grid.rows;
+		layout.grid.columns = columns; layout.grid.rows = rows;
+		var kept = [], dropped = [];
+		layout.panels.forEach(function (p) {
+			var c0 = Math.round((p.col - 1) * fx), c1 = Math.round((p.col - 1 + p.colSpan) * fx);
+			var r0 = Math.round((p.row - 1) * fy), r1 = Math.round((p.row - 1 + p.rowSpan) * fy);
+			p.colSpan = clamp(c1 - c0, 1, columns); p.rowSpan = clamp(r1 - r0, 1, rows);
+			p.col = clamp(c0 + 1, 1, columns - p.colSpan + 1); p.row = clamp(r0 + 1, 1, rows - p.rowSpan + 1);
+			if (!fits(kept, p)) {
+				var spot = findSpotShrinking(kept, p.colSpan, p.rowSpan);
+				if (!spot) { dropped.push(panelName(p)); return; }
+				p.col = spot.col; p.row = spot.row; p.colSpan = spot.colSpan; p.rowSpan = spot.rowSpan;
+			}
+			kept.push(p);
+		});
+		layout.panels = kept;
+		return dropped;
+	}
+
+	function openLayoutMenu() {
+		var html = "<h2>Layout</h2>" +
+			"<p>" + (layoutSaved ? "This layout is saved in the browser and survives restarts." : "Showing the layout from config.js; the first change you make is saved in the browser.") +
+			" " + layout.panels.length + " panels on a " + layout.grid.columns + " × " + layout.grid.rows + " grid.</p>" +
+			'<div class="actions" style="justify-content:flex-start; margin-top:4px">' +
+			'<button class="btn" data-download>Download as config.js</button>' +
+			'<button class="btn" data-copy>Copy to clipboard</button>' +
+			'<button class="btn" data-import>Paste a layout…</button>' +
+			'<button class="btn danger" data-reset>Reset to config.js</button>' +
+			"</div>" +
+			'<div class="note" style="margin-top:12px">Download or copy to keep a layout for another screen or machine; dropping the file into dashboard/ as config.js makes it the starting layout.</div>' +
+			'<div class="actions"><button class="btn ghost" data-close>Close</button></div>';
+		var d = openModal(html);
+		d.querySelector("[data-close]").addEventListener("click", closeModal);
+		d.querySelector("[data-download]").addEventListener("click", function () {
+			var blob = new Blob([configJsText()], { type: "text/javascript" });
+			var a = document.createElement("a");
+			a.href = URL.createObjectURL(blob);
+			a.download = "config.js";
+			document.body.appendChild(a);
+			a.click();
+			setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+			toast("Saved config.js to your Downloads folder");
+		});
+		d.querySelector("[data-copy]").addEventListener("click", function () {
+			var text = configJsText();
+			var done = function () { toast("Layout copied"); };
+			if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () { showCopyFallback(text); });
+			else showCopyFallback(text);
+		});
+		d.querySelector("[data-import]").addEventListener("click", openImport);
+		d.querySelector("[data-reset]").addEventListener("click", function () {
+			var c = openModal("<h2>Reset to config.js?</h2><p>The layout saved in the browser is forgotten and config.js is loaded again (and watched for changes until you edit on screen).</p>" +
+				'<div class="actions"><button class="btn ghost" data-close>Keep mine</button><button class="btn danger" data-ok>Reset</button></div>');
+			c.querySelector("[data-close]").addEventListener("click", closeModal);
+			c.querySelector("[data-ok]").addEventListener("click", function () {
+				forgetSaved();
+				closeModal();
+				loadFromConfig(lastGoodConfig || DEFAULT_CONFIG, lastGoodConfig ? [] : ["config.js did not load – showing the built-in default layout"]);
+				toast("Layout reset to config.js");
+			});
+		});
+	}
+	function showCopyFallback(text) {
+		var d = openModal("<h2>Copy this</h2><textarea style=\"min-height:50vh\" readonly></textarea><div class=\"actions\"><button class=\"btn ghost\" data-close>Close</button></div>");
+		d.querySelector("textarea").value = text;
+		d.querySelector("textarea").select();
+		d.querySelector("[data-close]").addEventListener("click", closeModal);
+	}
+	function openImport() {
+		var d = openModal("<h2>Paste a layout</h2><p>Either a downloaded config.js or just the <code>{ … }</code> object.</p>" +
+			'<textarea style="min-height:40vh" placeholder="window.HUD_CONFIG = { … };"></textarea><div class="note" data-status></div>' +
+			'<div class="actions"><button class="btn ghost" data-close>Cancel</button><button class="btn primary" data-ok>Use this layout</button></div>');
+		d.querySelector("[data-close]").addEventListener("click", closeModal);
+		d.querySelector("[data-ok]").addEventListener("click", function () {
+			var text = d.querySelector("textarea").value.trim();
+			text = text.replace(/^[\s\S]*?window\.HUD_CONFIG\s*=/, "").replace(/;\s*$/, "");
+			var cfg;
+			try { cfg = (new Function("return (" + text + ");"))(); }
+			catch (e) { d.querySelector("[data-status]").innerHTML = '<span class="bad">Could not read that: ' + esc(e.message) + "</span>"; return; }
+			var n = normalize(cfg);
+			if (n.errors.length) { d.querySelector("[data-status]").innerHTML = '<span class="bad">' + esc(n.errors.join("\n")) + "</span>"; }
+			if (!n.layout.panels.length) { d.querySelector("[data-status]").innerHTML += '<div class="bad">No usable panels in that layout.</div>'; return; }
+			layout = n.layout;
+			panelEls = {}; document.getElementById("grid").innerHTML = "";
+			closeModal();
+			render();
+			save();
+			setActiveName(null);
+			toast("Layout loaded");
+		});
+	}
+
+	// ---- startup and config.js watching ------------------------------------
+
+	function loadFromConfig(config, extraErrors) {
+		var n = normalize(config);
+		layout = n.layout;
+		configJson = JSON.stringify(config);
+		if (config !== DEFAULT_CONFIG) lastGoodConfig = config;
+		currentErrors = n.errors;
+		panelEls = {}; document.getElementById("grid").innerHTML = "";
+		render();
 		showErrors((extraErrors || []).concat(currentErrors));
 	}
 
 	// Re-reads config.js by loading it again as a script (works from file://,
-	// where fetch() of local files is blocked) and rebuilds only when it changed.
+	// where fetch() of local files is blocked). While config.js is the layout
+	// in use, a change rebuilds the screen; once the editor has saved its own
+	// layout the file is only remembered for "Reset to config.js".
 	function checkConfig() {
+		if (editing) return;
 		window.HUD_CONFIG = undefined;
 		lastScriptError = null;
 		var script = document.createElement("script");
@@ -236,29 +1341,37 @@
 		script.onload = function () {
 			script.remove();
 			if (window.HUD_CONFIG === undefined) {
-				window.HUD_CONFIG = current;
-				showErrors(["config.js has an error" + (lastScriptError && lastScriptError !== "Script error." ? " (" + lastScriptError + ")" : "") + " – keeping the last good layout"].concat(currentErrors));
+				if (!layoutSaved) showErrors(["config.js has an error" + (lastScriptError && lastScriptError !== "Script error." ? " (" + lastScriptError + ")" : "") + " – keeping the last good layout"].concat(currentErrors));
 				return;
 			}
+			lastGoodConfig = window.HUD_CONFIG;
+			if (layoutSaved) return;
 			var json = JSON.stringify(window.HUD_CONFIG);
-			if (json !== currentJson) apply(window.HUD_CONFIG);
+			if (json !== configJson) loadFromConfig(window.HUD_CONFIG);
 			else showErrors(currentErrors);
 		};
 		script.onerror = function () {
 			script.remove();
-			window.HUD_CONFIG = current;
-			showErrors(["config.js could not be loaded – keeping the last good layout"].concat(currentErrors));
+			if (!layoutSaved) showErrors(["config.js could not be loaded – keeping the last good layout"].concat(currentErrors));
 		};
 		document.head.appendChild(script);
 	}
 
-	if (window.HUD_CONFIG === undefined) {
-		apply(DEFAULT_CONFIG, ["config.js did not load or has an error" + (lastScriptError && lastScriptError !== "Script error." ? " (" + lastScriptError + ")" : "") + " – showing the built-in default layout"]);
+	var saved = loadSaved();
+	if (saved && saved.panels.length) {
+		layout = saved;
+		layoutSaved = true;
+		if (window.HUD_CONFIG !== undefined) { lastGoodConfig = window.HUD_CONFIG; configJson = JSON.stringify(window.HUD_CONFIG); }
+		render();
+		showErrors([]);
+	} else if (window.HUD_CONFIG === undefined) {
+		loadFromConfig(DEFAULT_CONFIG, ["config.js did not load or has an error" + (lastScriptError && lastScriptError !== "Script error." ? " (" + lastScriptError + ")" : "") + " – showing the built-in default layout"]);
 	} else {
-		apply(window.HUD_CONFIG);
+		loadFromConfig(window.HUD_CONFIG);
 	}
-	if (!current || current.watchConfig !== false) {
-		var interval = (current && isInt(current.watchInterval, 500)) ? current.watchInterval : 3000;
+	var cfg = window.HUD_CONFIG;
+	if (!cfg || cfg.watchConfig !== false) {
+		var interval = (cfg && isInt(cfg.watchInterval, 500)) ? cfg.watchInterval : 3000;
 		setInterval(checkConfig, interval);
 	}
 	</script>

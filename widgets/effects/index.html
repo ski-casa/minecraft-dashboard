@@ -1,0 +1,214 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="modApiBase" data-label="iCUE HUD Bridge mod URL" data-type="textfield" data-default="http://localhost:27421" />
+<meta name="x-icue-property" data-name="title" data-label="Title (blank for none)" data-type="textfield" data-default="Effects" />
+<meta name="x-icue-property" data-name="warnSeconds" data-label="Seconds left that count as 'running out'" data-type="textfield" data-default="30" />
+<meta name="x-icue-property" data-name="showVitals" data-label="Health / food / air row (1 or 0)" data-type="textfield" data-default="1" />
+<meta name="x-icue-property" data-name="fontScale" data-label="Text size multiplier (1 = default)" data-type="textfield" data-default="1" />
+<style>
+	/* Sized from the panel's smaller side so the widget scales to any grid cell. */
+	html { font-size: 4.6vmin; }
+	html, body {
+		-webkit-user-select: none;
+		user-select: none;   /* a long press must not select text (Edge shows its mini menu) */
+		margin: 0;
+		padding: 0;
+		width: 100%;
+		height: 100%;
+		background: #101014;
+		color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+	}
+	.wrap {
+		box-sizing: border-box;
+		width: 100%;
+		height: 100%;
+		padding: 4% 7% 5%;
+		display: flex;
+		flex-direction: column;
+		gap: 0.3em;
+	}
+	.title {
+		font-size: 3.8vw;      /* by panel width so titles match across panels of the same width */
+		font-weight: 600;
+		opacity: 0.6;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+	}
+	.title:empty { display: none; }
+	.vitals {
+		display: flex;
+		gap: 1em;
+		font-family: "Consolas", "Cascadia Mono", monospace;
+		font-size: 1em;
+		font-variant-numeric: tabular-nums;
+		opacity: 0.85;
+	}
+	.vitals span b { font-weight: 400; opacity: 0.55; margin-right: 0.3em; }
+	.vitals .low { color: #ff453a; }
+	.wrap.no-vitals .vitals { display: none; }
+	.rows {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-height: 0;
+		gap: 0.35em;
+		overflow: hidden;
+	}
+	.row {
+		display: grid;
+		grid-template-columns: auto 1fr auto;
+		grid-template-rows: auto auto;
+		column-gap: 0.6em;
+		align-items: center;
+	}
+	.icon {
+		grid-row: 1 / span 2;
+		width: 2.2em;
+		height: 2.2em;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 0.3em;
+		background: rgba(255, 255, 255, 0.05);
+	}
+	.icon img { width: 1.8em; height: 1.8em; image-rendering: pixelated; }
+	.icon .dot { width: 1.1em; height: 1.1em; border-radius: 50%; }
+	.name { font-size: 1.05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.name small { opacity: 0.6; margin-left: 0.3em; }
+	.time {
+		font-family: "Consolas", "Cascadia Mono", monospace;
+		font-size: 1.15em;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		text-align: right;
+	}
+	.bar {
+		grid-column: 2 / span 2;
+		height: 0.55em;
+		border-radius: 0.3em;
+		background: rgba(255, 255, 255, 0.1);
+		overflow: hidden;
+	}
+	.bar > div { height: 100%; border-radius: 0.3em; transition: width 0.5s linear; }
+	.row.harmful .time { color: #ff9f0a; }
+	.row.warn .time { color: #ff453a; }
+	.row.warn .bar > div { background: #ff453a !important; animation: pulse 0.6s ease-in-out infinite alternate; }
+	.row.warn .name { color: #ff6b63; font-weight: 600; }
+	@keyframes pulse { from { opacity: 1; } to { opacity: 0.35; } }
+	.none, .offline {
+		display: none;
+		flex: 1;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		font-size: 1.3em;
+		opacity: 0.6;
+	}
+	.wrap.empty .none { display: flex; }
+	.wrap.offline-mode .rows, .wrap.offline-mode .title, .wrap.offline-mode .vitals, .wrap.offline-mode .none { display: none; }
+	.wrap.offline-mode .offline { display: flex; }
+</style>
+</head>
+<body>
+	<div class="wrap" id="wrap">
+		<div class="title" id="heading"></div>
+		<div class="vitals" id="vitals"></div>
+		<div class="rows" id="rows"></div>
+		<div class="none">No effects</div>
+		<div class="offline" id="offline">HUD mod not running</div>
+	</div>
+<script src="jm-api.js"></script>
+<script>
+	JM.applyFontScale(4.6);
+	document.getElementById("heading").textContent = window.title === undefined ? "Effects" : String(window.title);
+	var warnSeconds = parseFloat(window.warnSeconds); if (isNaN(warnSeconds)) warnSeconds = 30;
+	var showVitals = String(window.showVitals === undefined ? "1" : window.showVitals).toLowerCase();
+	document.getElementById("wrap").classList.toggle("no-vitals", showVitals === "0" || showVitals === "false" || showVitals === "no");
+
+	// Effects whose end you really want to see coming.
+	var CRITICAL = { "minecraft:fire_resistance": 1, "minecraft:water_breathing": 1, "minecraft:slow_falling": 1, "minecraft:invisibility": 1, "minecraft:conduit_power": 1 };
+	var ROMAN = ["", "II", "III", "IV", "V", "VI", "VII", "VIII"];
+
+	function fmt(seconds) {
+		if (seconds < 0) return "∞";
+		var m = Math.floor(seconds / 60), s = Math.floor(seconds % 60);
+		return m + ":" + (s < 10 ? "0" : "") + s;
+	}
+	function hex(color) { return "#" + ("000000" + (color >>> 0 & 0xffffff).toString(16)).slice(-6); }
+
+	var rows = {};   // effect id -> { el, ..., max }
+	function render(state) {
+		var host = document.getElementById("rows");
+		var list = (state.effects || []).slice().sort(function (a, b) {
+			// running-out first, then harmful, then by time left (infinite last)
+			var wa = a.duration >= 0 && a.duration / 20 <= warnSeconds, wb = b.duration >= 0 && b.duration / 20 <= warnSeconds;
+			if (wa !== wb) return wa ? -1 : 1;
+			if ((a.category === "harmful") !== (b.category === "harmful")) return a.category === "harmful" ? -1 : 1;
+			if ((a.duration < 0) !== (b.duration < 0)) return a.duration < 0 ? 1 : -1;
+			return a.duration - b.duration;
+		});
+		var seen = {};
+		list.forEach(function (e, i) {
+			seen[e.id] = true;
+			var r = rows[e.id];
+			if (!r) {
+				var el = document.createElement("div");
+				el.className = "row";
+				el.innerHTML = '<div class="icon"></div><div class="name"></div><div class="time"></div><div class="bar"><div></div></div>';
+				r = rows[e.id] = { el: el, icon: el.querySelector(".icon"), name: el.querySelector(".name"), time: el.querySelector(".time"), fill: el.querySelector(".bar > div"), max: 0 };
+				var img = document.createElement("img");
+				img.alt = "";
+				img.onerror = function () { r.icon.innerHTML = '<div class="dot" style="background:' + hex(e.color) + '"></div>'; };
+				img.src = JM.effectIconUrl(e.id);
+				r.icon.appendChild(img);
+			}
+			if (host.children[i] !== r.el) host.insertBefore(r.el, host.children[i] || null);
+			if (e.duration > r.max) r.max = e.duration;              // bar is relative to the longest seen
+			var secs = e.duration < 0 ? -1 : e.duration / 20;
+			r.name.textContent = e.name;
+			if (e.amplifier > 0) { var sm = document.createElement("small"); sm.textContent = ROMAN[e.amplifier] || (e.amplifier + 1); r.name.appendChild(sm); }
+			r.time.textContent = fmt(secs);
+			r.fill.style.background = hex(e.color);
+			r.fill.style.width = (e.duration < 0 ? 100 : Math.max(1.5, e.duration / Math.max(r.max, 1) * 100)) + "%";
+			r.el.classList.toggle("harmful", e.category === "harmful");
+			r.el.classList.toggle("warn", secs >= 0 && secs <= warnSeconds && (CRITICAL[e.id] || e.category !== "harmful"));
+		});
+		Object.keys(rows).forEach(function (id) { if (!seen[id]) { rows[id].el.remove(); delete rows[id]; } });
+		document.getElementById("wrap").classList.toggle("empty", !list.length);
+
+		var v = state.vitals;
+		if (v) {
+			var hp = Math.ceil(v.health + v.absorption), air = Math.round(v.air / v.maxAir * 100);
+			document.getElementById("vitals").innerHTML =
+				'<span class="' + (v.health <= 6 ? "low" : "") + '"><b>♥</b>' + hp + "</span>" +
+				'<span class="' + (v.food <= 6 ? "low" : "") + '"><b>🍖</b>' + v.food + "</span>" +
+				(v.air < v.maxAir ? '<span class="' + (air <= 25 ? "low" : "") + '"><b>💨</b>' + air + "%</span>" : "") +
+				"<span><b>✦</b>" + v.xpLevel + "</span>" +
+				(v.onFire ? '<span class="low">🔥</span>' : "");
+		}
+	}
+
+	function setOffline(text) {
+		var wrap = document.getElementById("wrap");
+		wrap.classList.toggle("offline-mode", !!text);
+		if (text) document.getElementById("offline").textContent = text;
+	}
+	function poll() {
+		JM.fetchState()
+			.then(function (state) {
+				if (!state.inGame) { setOffline("Not in a world"); return; }
+				setOffline(null);
+				render(state);
+			})
+			.catch(function () { setOffline("HUD mod not running"); });
+	}
+	setOffline("HUD mod not running");
+	poll();
+	setInterval(poll, 500);
+</script>
+</body>
+</html>

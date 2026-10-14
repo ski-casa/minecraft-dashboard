@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="modApiBase" data-label="iCUE HUD Bridge mod URL" data-type="textfield" data-default="http://localhost:27421" />
+<meta name="x-icue-property" data-name="hotbar" data-label="Hotbar row: bottom, top or hide" data-type="textfield" data-default="bottom" />
+<meta name="x-icue-property" data-name="fontScale" data-label="Text size multiplier (1 = default)" data-type="textfield" data-default="1" />
+<style>
+	html { font-size: 4vmin; }
+	html, body {
+		-webkit-user-select: none;
+		user-select: none;
+		margin: 0; padding: 0; width: 100%; height: 100%;
+		background: #101014; color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+	}
+	.wrap { box-sizing: border-box; width: 100%; height: 100%; padding: 4% 5%; display: flex; flex-direction: column; gap: 0.3em; }
+	.title { font-size: 3.8vw; font-weight: 600; opacity: 0.6; letter-spacing: 0.05em; text-transform: uppercase; display: flex; justify-content: space-between; }
+	.title .free { font-family: "Consolas", "Cascadia Mono", monospace; letter-spacing: 0; }
+	.title .free.full { color: #ff453a; opacity: 1; }
+	.grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(9, 1fr); grid-auto-rows: 1fr; gap: 2%; }
+	.slot {
+		position: relative; min-width: 0; min-height: 0;
+		border-radius: 12%; background: rgba(255, 255, 255, 0.06);
+		display: flex; align-items: center; justify-content: center; overflow: hidden;
+	}
+	.slot.hot { background: rgba(255, 255, 255, 0.11); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+	.slot.gap { grid-column: 1 / -1; background: none; min-height: 0; height: 0.3em; }
+	.slot img { width: 70%; height: 70%; object-fit: contain; image-rendering: pixelated; }
+	.slot .letter { font-size: 1.1em; font-weight: 700; opacity: 0.5; }
+	.slot .count {
+		position: absolute; right: 6%; bottom: 2%;
+		font-family: "Consolas", "Cascadia Mono", monospace; font-size: 0.85em; font-weight: 700;
+		text-shadow: 0 0 0.2em #000, 0 0 0.2em #000;
+	}
+	.slot .dur { position: absolute; left: 10%; right: 10%; bottom: 8%; height: 8%; background: rgba(0, 0, 0, 0.5); border-radius: 1px; }
+	.slot .dur > div { height: 100%; background: #34c759; }
+	.slot .dur.low > div { background: #ff453a; }
+	.msg { display: none; flex: 1; align-items: center; justify-content: center; text-align: center; font-size: 1.3em; opacity: 0.6; }
+	.wrap.msg-mode .grid, .wrap.msg-mode .title { display: none; }
+	.wrap.msg-mode .msg { display: flex; }
+</style>
+</head>
+<body>
+	<div class="wrap" id="wrap">
+		<div class="title"><span>Inventory</span><span class="free" id="free"></span></div>
+		<div class="grid" id="grid"></div>
+		<div class="msg" id="msg">HUD mod not running</div>
+	</div>
+<script src="jm-api.js"></script>
+<script>
+	JM.applyFontScale(4);
+	var hotbar = String(window.hotbar || "bottom").toLowerCase();
+	// Slot order on screen: storage rows (9-35) then the hotbar (0-8), like the game.
+	var order = [];
+	for (var i = 9; i < 36; i++) order.push(i);
+	if (hotbar === "top") order = [0, 1, 2, 3, 4, 5, 6, 7, 8, "gap"].concat(order);
+	else if (hotbar !== "hide") order = order.concat(["gap", 0, 1, 2, 3, 4, 5, 6, 7, 8]);
+
+	var cells = {};
+	var grid = document.getElementById("grid");
+	order.forEach(function (slot) {
+		var el = document.createElement("div");
+		el.className = "slot" + (slot === "gap" ? " gap" : (slot < 9 ? " hot" : ""));
+		grid.appendChild(el);
+		if (slot !== "gap") cells[slot] = { el: el, key: null };
+	});
+
+	function setMsg(text) {
+		document.getElementById("wrap").classList.toggle("msg-mode", !!text);
+		if (text) document.getElementById("msg").textContent = text;
+	}
+	function render(state) {
+		var bySlot = {};
+		(state.inventory || []).forEach(function (it) { bySlot[it.slot] = it; });
+		var used = 0;
+		Object.keys(cells).forEach(function (slot) {
+			var c = cells[slot], it = bySlot[slot];
+			if (it) used++;
+			var key = it ? it.id + "|" + it.count + "|" + (it.damage || 0) : "";
+			if (key === c.key) return;
+			c.key = key;
+			c.el.innerHTML = "";
+			if (!it) return;
+			var img = document.createElement("img");
+			img.alt = "";
+			img.onerror = function () { img.replaceWith(Object.assign(document.createElement("span"), { className: "letter", textContent: JM.itemLabel(it.id).charAt(0) })); };
+			img.src = JM.iconUrl(it.id);
+			c.el.appendChild(img);
+			if (it.count > 1) c.el.insertAdjacentHTML("beforeend", '<span class="count">' + it.count + "</span>");
+			if (typeof it.maxDamage === "number" && it.maxDamage > 0 && it.damage > 0) {
+				var pct = (it.maxDamage - it.damage) / it.maxDamage * 100;
+				c.el.insertAdjacentHTML("beforeend", '<div class="dur' + (pct < 15 ? " low" : "") + '"><div style="width:' + pct + '%"></div></div>');
+			}
+		});
+		var total = Object.keys(cells).length, free = total - used;
+		var f = document.getElementById("free");
+		f.textContent = free ? free + " free" : "FULL";
+		f.className = "free" + (free <= 2 ? " full" : "");
+	}
+	function poll() {
+		JM.fetchState()
+			.then(function (state) {
+				if (!state.inGame) { setMsg("Not in a world"); return; }
+				setMsg(null);
+				render(state);
+			})
+			.catch(function () { setMsg("HUD mod not running"); });
+	}
+	setMsg("HUD mod not running");
+	poll();
+	setInterval(poll, 500);
+</script>
+</body>
+</html>

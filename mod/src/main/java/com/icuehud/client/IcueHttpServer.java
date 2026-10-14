@@ -21,18 +21,22 @@ import java.util.concurrent.Executors;
  * Loopback-only HTTP API:
  *   GET /state           the current snapshot (see IcueHudClient.onTick)
  *   GET /icon?id=<item>  the item's texture as PNG (falls back to its block texture), 404 if none
+ *   GET /icon?effect=<id> a potion effect's icon
+ *   POST /action         JSON { "action": ..., ... }, see Actions; runs on the game thread next tick
  */
 public class IcueHttpServer {
 	private static final byte[] NO_ICON = new byte[0];
 
 	private final GameState state;
 	private final int port;
+	private final java.util.function.Consumer<com.google.gson.JsonObject> actionSink;
 	private final Map<String, byte[]> iconCache = new ConcurrentHashMap<>();
 	private HttpServer server;
 
-	public IcueHttpServer(GameState state, int port) {
+	public IcueHttpServer(GameState state, int port, java.util.function.Consumer<com.google.gson.JsonObject> actionSink) {
 		this.state = state;
 		this.port = port;
+		this.actionSink = actionSink;
 	}
 
 	public void start() {
@@ -40,6 +44,7 @@ public class IcueHttpServer {
 			server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
 			server.createContext("/state", this::handleState);
 			server.createContext("/icon", this::handleIcon);
+			server.createContext("/action", this::handleAction);
 			server.createContext("/", ex -> send(ex, 404, "text/plain", "icuehud: try /state or /icon?id=minecraft:stone".getBytes(StandardCharsets.UTF_8)));
 			server.setExecutor(Executors.newFixedThreadPool(2, r -> {
 				Thread t = new Thread(r, "icuehud-http");
@@ -61,13 +66,54 @@ public class IcueHttpServer {
 		send(exchange, 200, "application/json; charset=utf-8", state.get().getBytes(StandardCharsets.UTF_8));
 	}
 
+	private void handleAction(HttpExchange exchange) throws IOException {
+		if (exchange.getRequestMethod().equalsIgnoreCase("OPTIONS")) {   // CORS preflight from the file:// dashboard
+			send(exchange, 204, "text/plain", new byte[0]);
+			return;
+		}
+		if (!exchange.getRequestMethod().equalsIgnoreCase("POST")) {
+			send(exchange, 405, "text/plain", "POST a JSON body like {\"action\":\"chat\",\"text\":\"hi\"}".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		String body;
+		try (InputStream in = exchange.getRequestBody()) {
+			body = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+		}
+		com.google.gson.JsonObject action;
+		try {
+			action = com.google.gson.JsonParser.parseString(body).getAsJsonObject();
+		} catch (RuntimeException e) {
+			send(exchange, 400, "application/json", "{\"ok\":false,\"error\":\"body must be a JSON object\"}".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		String name = action.has("action") ? action.get("action").getAsString() : "";
+		if (!Actions.NAMES.contains(name)) {
+			send(exchange, 400, "application/json", ("{\"ok\":false,\"error\":\"unknown action; one of " + String.join(", ", Actions.NAMES) + "\"}").getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		if (state.get().startsWith("{\"inGame\":false")) {
+			send(exchange, 409, "application/json", "{\"ok\":false,\"error\":\"not in a world\"}".getBytes(StandardCharsets.UTF_8));
+			return;
+		}
+		actionSink.accept(action);
+		send(exchange, 200, "application/json", "{\"ok\":true}".getBytes(StandardCharsets.UTF_8));
+	}
+
 	private void handleIcon(HttpExchange exchange) throws IOException {
 		String query = exchange.getRequestURI().getRawQuery();
-		String id = null;
+		String id = null, effect = null;
 		if (query != null) {
 			for (String part : query.split("&")) {
 				if (part.startsWith("id=")) id = URLDecoder.decode(part.substring(3), StandardCharsets.UTF_8);
+				if (part.startsWith("effect=")) effect = URLDecoder.decode(part.substring(7), StandardCharsets.UTF_8);
 			}
+		}
+		if (effect != null) {
+			Identifier fx = Identifier.tryParse(effect.contains(":") ? effect : "minecraft:" + effect);
+			byte[] png = fx == null ? null : readResource(fx.getNamespace(), "textures/mob_effect/" + fx.getPath() + ".png");
+			if (png == null) send(exchange, 404, "text/plain", "no icon for this effect".getBytes(StandardCharsets.UTF_8));
+			else { exchange.getResponseHeaders().set("Cache-Control", "max-age=86400"); send(exchange, 200, "image/png", png); }
+			return;
 		}
 		Identifier item = id == null ? null : Identifier.tryParse(id.contains(":") ? id : "minecraft:" + id);
 		if (item == null) {
@@ -178,9 +224,11 @@ public class IcueHttpServer {
 
 	private static void send(HttpExchange exchange, int status, String contentType, byte[] body) throws IOException {
 		exchange.getResponseHeaders().set("Content-Type", contentType);
-		// Wide-open CORS is fine: loopback-only and read-only.
+		// Wide-open CORS is fine: loopback-only, and /action only does what the player's own keys could.
 		exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-		exchange.sendResponseHeaders(status, body.length);
+		exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+		exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+		exchange.sendResponseHeaders(status, body.length == 0 ? -1 : body.length);
 		try (OutputStream os = exchange.getResponseBody()) {
 			os.write(body);
 		}

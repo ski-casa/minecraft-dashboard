@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="apiBase" data-label="JourneyMap webmap URL" data-type="textfield" data-default="http://localhost:8080" />
+<meta name="x-icue-property" data-name="maxRows" data-label="Maximum rows" data-type="textfield" data-default="8" />
+<meta name="x-icue-property" data-name="range" data-label="Only within this many blocks (0 = all)" data-type="textfield" data-default="0" />
+<meta name="x-icue-property" data-name="fontScale" data-label="Text size multiplier (1 = default)" data-type="textfield" data-default="1" />
+<style>
+	html { font-size: 4.4vmin; }
+	html, body {
+		-webkit-user-select: none;
+		user-select: none;
+		margin: 0; padding: 0; width: 100%; height: 100%;
+		background: #101014; color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+	}
+	.wrap { box-sizing: border-box; width: 100%; height: 100%; padding: 4% 7% 5%; display: flex; flex-direction: column; gap: 0.3em; }
+	.title { font-size: 3.8vw; font-weight: 600; opacity: 0.6; letter-spacing: 0.05em; text-transform: uppercase; display: flex; justify-content: space-between; }
+	.title .count { font-family: "Consolas", "Cascadia Mono", monospace; letter-spacing: 0; }
+	.title .count.some { color: #ff453a; opacity: 1; }
+	.rows { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0.3em; overflow: hidden; }
+	.row { display: grid; grid-template-columns: auto 1fr auto auto; column-gap: 0.6em; align-items: center; }
+	.icon { width: 2em; height: 2em; border-radius: 0.3em; background: rgba(255, 69, 58, 0.12); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+	.icon img { width: 1.6em; height: 1.6em; image-rendering: pixelated; object-fit: cover; object-position: top left; }
+	.icon .dot { width: 0.9em; height: 0.9em; border-radius: 50%; background: #ff453a; }
+	.name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.dist { font-family: "Consolas", "Cascadia Mono", monospace; font-weight: 700; font-size: 1.15em; font-variant-numeric: tabular-nums; }
+	.dist small { font-size: 0.6em; font-weight: 400; opacity: 0.6; }
+	.row.near .dist { color: #ff453a; }
+	.row.close .dist { color: #ff9f0a; }
+	.arrow { width: 1.6em; height: 1.6em; display: flex; align-items: center; justify-content: center; font-size: 1.3em; color: #ff9f0a; transition: transform 0.3s; }
+	.msg { display: none; flex: 1; align-items: center; justify-content: center; text-align: center; font-size: 1.3em; opacity: 0.6; }
+	.wrap.msg-mode .rows { display: none; }
+	.wrap.msg-mode .msg { display: flex; }
+</style>
+</head>
+<body>
+	<div class="wrap" id="wrap">
+		<div class="title"><span>Threats</span><span class="count" id="count"></span></div>
+		<div class="rows" id="rows"></div>
+		<div class="msg" id="msg">Minecraft not running</div>
+	</div>
+<script src="jm-api.js"></script>
+<script>
+	JM.applyFontScale(4.4);
+	var maxRows = parseInt(window.maxRows, 10) || 8;
+	var range = parseFloat(window.range) || 0;
+
+	function setMsg(text) {
+		document.getElementById("wrap").classList.toggle("msg-mode", !!text);
+		if (text) document.getElementById("msg").textContent = text;
+	}
+	// "minecraft:textures/entity/creeper/creeper.png" -> "Creeper"
+	function nameOf(raw) {
+		if (raw.customName) return String(raw.customName);
+		if (raw.entityType) return String(raw.entityType).replace(/^.*[:.]/, "").replace(/_/g, " ");
+		var m = /\/([a-z_]+)\.png$/i.exec(raw.iconLocation || "");
+		var n = m ? m[1].replace(/_/g, " ") : "mob";
+		return n.charAt(0).toUpperCase() + n.slice(1);
+	}
+	function values(d) { return Array.isArray(d) ? d : (d && typeof d === "object" ? Object.keys(d).map(function (k) { return d[k]; }) : []); }
+
+	var rows = {};
+	function render(player, list) {
+		var host = document.getElementById("rows");
+		var items = list.map(function (raw) {
+			var dx = raw.posX - player.x, dz = raw.posZ - player.z, dy = (typeof raw.posY === "number" ? raw.posY : player.y) - player.y;
+			return { raw: raw, id: String(raw.entityId || (raw.posX + "," + raw.posZ)), flat: Math.sqrt(dx * dx + dz * dz), dy: dy,
+				rel: JM.relativeBearing(player.heading, JM.bearingTo(player.x, player.z, raw.posX, raw.posZ)) };
+		}).filter(function (e) { return !range || e.flat <= range; }).sort(function (a, b) { return a.flat - b.flat; });
+		var shown = items.slice(0, maxRows), seen = {};
+		shown.forEach(function (e, i) {
+			seen[e.id] = true;
+			var r = rows[e.id];
+			if (!r) {
+				var el = document.createElement("div");
+				el.className = "row";
+				el.innerHTML = '<div class="icon"></div><div class="name"></div><div class="dist"></div><div class="arrow">↑</div>';
+				r = rows[e.id] = { el: el, icon: el.querySelector(".icon"), name: el.querySelector(".name"), dist: el.querySelector(".dist"), arrow: el.querySelector(".arrow") };
+				if (e.raw.iconLocation) {
+					var img = document.createElement("img");
+					img.onerror = function () { r.icon.innerHTML = '<div class="dot"></div>'; };
+					img.src = JM.apiBase() + "/resources?resource=" + encodeURIComponent(e.raw.iconLocation);
+					r.icon.appendChild(img);
+				} else r.icon.innerHTML = '<div class="dot"></div>';
+				r.name.textContent = nameOf(e.raw);
+			}
+			if (host.children[i] !== r.el) host.insertBefore(r.el, host.children[i] || null);
+			r.dist.innerHTML = Math.round(e.flat) + (Math.abs(e.dy) >= 3 ? "<small>" + (e.dy > 0 ? " ↑" : " ↓") + Math.round(Math.abs(e.dy)) + "</small>" : "");
+			r.arrow.style.transform = "rotate(" + e.rel + "deg)";
+			r.el.className = "row" + (e.flat <= 8 ? " near" : e.flat <= 16 ? " close" : "");
+		});
+		Object.keys(rows).forEach(function (id) { if (!seen[id]) { rows[id].el.remove(); delete rows[id]; } });
+		var c = document.getElementById("count");
+		c.textContent = items.length ? items.length + (items.length > shown.length ? " (" + shown.length + " shown)" : "") : "none";
+		c.className = "count" + (items.length ? " some" : "");
+	}
+
+	function poll() {
+		JM.fetchPlayer().then(function (player) {
+			return JM.getJson("/data/mobs").catch(function () { return []; }).then(function (d) {
+				var list = values(d).filter(function (raw) {
+					return raw && typeof raw.posX === "number" && !raw.invisible && raw.hostile !== false &&
+						(raw.dimension === undefined || raw.dimension === null || JM.dimensionKey(raw.dimension) === JM.dimensionKey(player.dimensionKey));
+				});
+				setMsg(null);
+				render(player, list);
+			});
+		}).catch(function () { setMsg("Minecraft not running"); });
+	}
+	poll();
+	setInterval(poll, 1000);
+</script>
+</body>
+</html>

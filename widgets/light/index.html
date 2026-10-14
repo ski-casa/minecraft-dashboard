@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="x-icue-property" data-name="modApiBase" data-label="iCUE HUD Bridge mod URL" data-type="textfield" data-default="http://localhost:27421" />
+<meta name="x-icue-property" data-name="fontScale" data-label="Text size multiplier (1 = default)" data-type="textfield" data-default="1" />
+<style>
+	html { font-size: 4.4vmin; }
+	html, body {
+		-webkit-user-select: none;
+		user-select: none;
+		margin: 0; padding: 0; width: 100%; height: 100%;
+		background: #101014; color: #e8e8ec;
+		font-family: "Segoe UI", sans-serif;
+		overflow: hidden;
+	}
+	.wrap { box-sizing: border-box; width: 100%; height: 100%; padding: 4% 7% 5%; display: flex; flex-direction: column; gap: 0.3em; }
+	.title { font-size: 3.8vw; font-weight: 600; opacity: 0.6; letter-spacing: 0.05em; text-transform: uppercase; }
+	.main { flex: 1; min-height: 0; display: grid; grid-template-columns: auto 1fr; column-gap: 0.8em; align-items: center; }
+	.lamp {
+		width: 3.4em; height: 3.4em; border-radius: 50%;
+		display: flex; align-items: center; justify-content: center;
+		font-family: "Consolas", "Cascadia Mono", monospace; font-size: 1.9em; font-weight: 700;
+		background: rgba(255, 214, 10, 0.15); color: #ffd60a;
+		box-shadow: 0 0 1.2em rgba(255, 214, 10, 0.25);
+	}
+	.lamp.dark { background: rgba(255, 69, 58, 0.15); color: #ff453a; box-shadow: 0 0 1.2em rgba(255, 69, 58, 0.3); animation: pulse 1s ease-in-out infinite alternate; }
+	@keyframes pulse { from { opacity: 1; } to { opacity: 0.55; } }
+	.facts { display: flex; flex-direction: column; gap: 0.15em; min-width: 0; }
+	.verdict { font-size: 1.25em; font-weight: 600; }
+	.verdict.bad { color: #ff453a; }
+	.verdict.ok { color: #34c759; }
+	.detail { font-family: "Consolas", "Cascadia Mono", monospace; font-size: 0.95em; opacity: 0.75; font-variant-numeric: tabular-nums; }
+	.footer { display: flex; justify-content: space-between; font-size: 0.95em; opacity: 0.75; }
+	.footer .rain { color: #5ac8fa; }
+	.footer .storm { color: #ff9f0a; }
+	.msg { display: none; flex: 1; align-items: center; justify-content: center; text-align: center; font-size: 1.3em; opacity: 0.6; }
+	.wrap.msg-mode .main, .wrap.msg-mode .footer { display: none; }
+	.wrap.msg-mode .msg { display: flex; }
+</style>
+</head>
+<body>
+	<div class="wrap" id="wrap">
+		<div class="title">Light here</div>
+		<div class="main">
+			<div class="lamp" id="lamp">&#8212;</div>
+			<div class="facts">
+				<div class="verdict" id="verdict"></div>
+				<div class="detail" id="detail"></div>
+			</div>
+		</div>
+		<div class="footer"><span id="weather"></span><span id="moon"></span></div>
+		<div class="msg" id="msg">HUD mod not running</div>
+	</div>
+<script src="jm-api.js"></script>
+<script>
+	JM.applyFontScale(4.4);
+	var MOON = ["Full moon", "Waning gibbous", "Last quarter", "Waning crescent", "New moon", "Waxing crescent", "First quarter", "Waxing gibbous"];
+	var MOON_GLYPH = ["🌕", "🌖", "🌗", "🌘", "🌑", "🌒", "🌓", "🌔"];
+
+	function setMsg(text) {
+		document.getElementById("wrap").classList.toggle("msg-mode", !!text);
+		if (text) document.getElementById("msg").textContent = text;
+	}
+	function render(state) {
+		var env = state.environment || {};
+		var block = env.blockLight, sky = env.skyLight;
+		var t = env.dayTime % 24000, night = t >= 13000 && t < 23000;
+		// Since 1.18 hostile mobs need block light 0; sky light only matters at night (or under cover during the day: sky 0).
+		var dangerous = block === 0 && (sky === 0 || night || env.thundering);
+		var dim = block === 0 && !dangerous;   // dark but the sky (daylight) is holding them off for now
+		var lamp = document.getElementById("lamp");
+		lamp.textContent = block;
+		lamp.className = "lamp" + (block === 0 ? " dark" : "");
+		var v = document.getElementById("verdict");
+		if (dangerous) { v.textContent = "Mobs can spawn here"; v.className = "verdict bad"; }
+		else if (dim) { v.textContent = "Dark – unsafe after dusk"; v.className = "verdict"; }
+		else { v.textContent = "Lit – no spawns"; v.className = "verdict ok"; }
+		document.getElementById("detail").textContent = "block " + block + " · sky " + sky + (sky === 0 ? " (covered)" : "");
+		var w = document.getElementById("weather");
+		if (env.thundering) { w.textContent = "⛈ Thunderstorm"; w.className = "storm"; }
+		else if (env.raining) { w.textContent = "🌧 Rain"; w.className = "rain"; }
+		else { w.textContent = "☀ Clear"; w.className = ""; }
+		var m = typeof env.moonPhase === "number" ? env.moonPhase : 0;
+		document.getElementById("moon").textContent = MOON_GLYPH[m] + " " + MOON[m];
+	}
+	function poll() {
+		JM.fetchState()
+			.then(function (state) {
+				if (!state.inGame) { setMsg("Not in a world"); return; }
+				if (!state.environment) { setMsg("Mod update needed"); return; }
+				setMsg(null);
+				render(state);
+			})
+			.catch(function () { setMsg("HUD mod not running"); });
+	}
+	setMsg("HUD mod not running");
+	poll();
+	setInterval(poll, 500);
+</script>
+</body>
+</html>

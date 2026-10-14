@@ -1,0 +1,21 @@
+{
+	"author": "steve",
+	"id": "com.icuehud.widgets.threats",
+	"name": "MC Threats",
+	"description": "Hostile mobs from JourneyMap's radar as a list with distance and direction.",
+	"version": "0.1.0",
+	"preview_icon": "icon.png",
+	"min_framework_version": "1.4.0",
+	"min_app_version": "5.47.0",
+	"os": [
+		{
+			"platform": "windows"
+		}
+	],
+	"supported_devices": [
+		{
+			"type": "dashboard_lcd"
+		}
+	],
+	"interactive": false
+}

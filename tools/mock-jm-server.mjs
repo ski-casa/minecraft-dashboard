@@ -83,6 +83,19 @@ http.createServer((req, res) => {
 			world: { dimension: "minecraft:overworld", time: 1000 },
 			images: { since: Date.now(), regions: [] }
 		}));
+	} else if (url.pathname === "/data/world") {
+		res.setHeader("Content-Type", "application/json");
+		res.end(JSON.stringify({ dimension: "minecraft:overworld", time: 1000, features: {} }));
+	} else if (url.pathname === "/data/mobs" || url.pathname === "/data/animals" || url.pathname === "/data/villagers" || url.pathname === "/data/players") {
+		// a few hostiles circling the player, nothing else
+		const t = Date.now() / 1000, p = player();
+		const list = url.pathname === "/data/mobs" ? [0, 1, 2].map(i => ({
+			entityId: 100 + i, hostile: true, posX: p.posX + Math.cos(t / 4 + i * 2) * (8 + i * 9), posY: p.posY, posZ: p.posZ + Math.sin(t / 4 + i * 2) * (8 + i * 9),
+			dimension: "minecraft:overworld", iconLocation: ["minecraft:textures/entity/creeper/creeper.png", "minecraft:textures/entity/zombie/zombie.png", "minecraft:textures/entity/skeleton/skeleton.png"][i],
+			entityType: ["Creeper", "Zombie", "Skeleton"][i]
+		})) : [];
+		res.setHeader("Content-Type", "application/json");
+		res.end(JSON.stringify(list));
 	} else if (url.pathname === "/tiles/tile.png") {
 		res.setHeader("Content-Type", "image/png");
 		res.end(tilePng);

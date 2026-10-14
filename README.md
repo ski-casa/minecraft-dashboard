@@ -14,12 +14,21 @@ Minecraft 26.3.
 has switched to the cave layer and shows three hostiles nearby, the chestplate and
 leggings are in the red, and the build project counts six tracked chests.*
 
-## Default layout
+## Layout
 
-The dashboard is a configurable grid ([dashboard/config.js](dashboard/config.js),
-documented in [dashboard/README.md](dashboard/README.md)). Out of the box it is
-a 16 × 9 grid with the map in the middle, three panels down the left, gear and
-build progress next to the map, and waypoints and environment on the right:
+The dashboard is a grid of panels that you arrange **on the screen itself**:
+tap the dim ⚙ in the bottom-left corner, then drag panels around, drag their
+corners to resize, ⚙ on a panel for its settings, **＋ Add widget** for more,
+**Screen** for the grid size, the saved layouts and the monitor to show on.
+Changes are saved as you make them (per monitor) and survive restarts;
+**Done** offers to keep the arrangement under a name, saved as a file in
+`dashboard/layouts/`, and **Layout…** exports it as a `config.js` to carry to
+another machine. Details in [dashboard/README.md](dashboard/README.md).
+
+[dashboard/config.js](dashboard/config.js) is the starting layout (and what
+"Reset" goes back to). Out of the box it is a 16 × 9 grid with the map in
+the middle, three panels down the left, gear and build progress next to the
+map, and waypoints and environment on the right:
 
 ```
 ┌─────────┬─────────────────────────┬──────────┬─────────┐
@@ -59,18 +68,30 @@ build progress next to the map, and waypoints and environment on the right:
   you placed. Chests you find are ignored unless you claim them with a key while
   they are open. Needs the mod below.
 
-The last two read the **iCUE HUD Bridge** mod in `mod/`, a small client-side Fabric
-mod that serves your inventory, equipment and tracked chest contents on
-`http://localhost:27421`. JourneyMap has no view of any of that. Item pictures are
+And, newer and smaller, each addable from the **＋ Add widget** menu:
+**Threats** (radar hostiles as a sorted list), **Effects** (potion effects with
+countdowns, warning before Fire Resistance runs out), **Death recovery** (where
+you died, how far, and the item-despawn countdown), **Light & spawn risk**,
+**Day counter**, **Inventory**, **XP & enchanting**, **Flight** (elytra),
+**Connection** (ping / FPS), **Quick actions** (buttons that press keys, send
+chat or capture coordinates in game), **Timers** and **Checklist**. The map
+also has a trail option and a fixed-center "base cam" mode. All documented in
+[dashboard/README.md](dashboard/README.md#widgets).
+
+Everything past JourneyMap's data reads the **iCUE HUD Bridge** mod in `mod/`, a
+small client-side Fabric mod that serves your inventory, equipment, effects,
+vitals, light level and tracked chest contents on `http://localhost:27421`,
+and accepts quick actions. JourneyMap has no view of any of that. Item pictures are
 the game's own sprites, or for 3D blocks (stairs, chests, shields) the Minecraft
 Wiki's inventory renders, fetched once and cached locally.
 
-Every panel's text size can be nudged per panel (`fontScale`), and the whole
-layout, including which panels exist, lives in `dashboard/config.js`.
-
-Change the grid, move panels, add a second map or a web page: edit
-`dashboard/config.js` and the running dashboard picks it up within seconds.
-All the options, examples and limitations are in [dashboard/README.md](dashboard/README.md).
+Every panel's text size can be nudged per panel ("Text size" in its
+settings), the same widget can be added twice with different settings (a
+close-up and an overview map), and any web page can be a panel. Because
+panels live in grid cells rather than pixels, the same layout fills any
+screen; on a differently shaped monitor, pick a grid that suits it under
+**Screen** and shuffle the panels. All the options, examples and limitations
+are in [dashboard/README.md](dashboard/README.md).
 
 ## Setup
 
@@ -138,12 +159,18 @@ a normal 2560x720 monitor. Then:
 
 opens [dashboard/index.html](dashboard/index.html) as a fullscreen kiosk browser
 window (Edge/Chrome with its own profile, pinch/swipe disabled) on the 32:9
-monitor. Step 2's task installer also registers it to open automatically at logon
-(`MinecraftHUD-Dashboard`). `-Restart` reopens it, `-Stop` closes it.
+monitor, or on another monitor if there is no Edge (`-ListMonitors` shows
+them, `-Monitor 2 -Remember` picks one for good; the **Screen** menu on the
+dashboard does the same with a tap). It also starts a small control service
+(`scripts/dashboard-control.ps1`, `localhost:27422`) that the page uses to
+list monitors and move itself. Step 2's task installer also registers it to
+open automatically at logon (`MinecraftHUD-Dashboard`). `-Restart` reopens
+it, `-Stop` closes both.
 
-The layout and every widget setting live in [dashboard/config.js](dashboard/config.js);
-see [dashboard/README.md](dashboard/README.md). Saving the file updates the
-running dashboard, and mistakes are reported in a banner on the screen.
+Then arrange the screen with the ⚙ in the corner (see [Layout](#layout)).
+The layout is kept in that browser profile; the starting layout and widget
+settings can also be written by hand in [dashboard/config.js](dashboard/config.js),
+see [dashboard/README.md](dashboard/README.md).
 
 <details>
 <summary>Alternative: iCUE widgets instead of the kiosk browser</summary>
@@ -172,8 +199,12 @@ game is closed.
   re-fetches only regions JourneyMap re-rendered.
 - The bridge mod (`mod/`) runs inside the client and serves
   `http://localhost:27421/state`: hotbar and inventory, the six equipment slots
-  with damage values, the last position captured with the hotkey, and every
-  tracked chest with its contents as of the last time it was open. Chests are
+  with damage values, active effects, vitals (health, food, air, XP, speed),
+  light level, weather and world time, the last death, ping and FPS, the last
+  position captured with the hotkey, and every tracked chest with its contents
+  as of the last time it was open. `POST /action` runs a key press, chat line,
+  command, capture, screenshot or camera toggle on the game thread (loopback
+  only, so it can do nothing your own keyboard could not). Chests are
   tracked when you place them (or claim them with the hotkey) and remembered
   per world in `.minecraft\config\icuehud\`. `/icon?id=` serves item pictures
   from the game files, falling back to Minecraft Wiki inventory sprites cached
@@ -181,10 +212,13 @@ game is closed.
 - `widgets/jm-api.js` is the shared API helper. Each widget folder carries its
   own copy because iCUE imports widgets as standalone packages; after editing
   the canonical file run `scripts\sync-jm-api.ps1` (the packager does it too).
-- `dashboard/index.html` reads `dashboard/config.js` and builds a CSS grid of
-  iframes, one per panel, passing each widget its settings as URL parameters.
-  It re-reads the config every few seconds (loading it as a script, since a
-  `file://` page cannot `fetch()` local files) and rebuilds when it changed.
+- `dashboard/index.html` builds a CSS grid of iframes, one per panel, passing
+  each widget its settings as URL parameters. The layout comes from the
+  browser's localStorage (written by the on-screen editor) or, until one is
+  saved, from `dashboard/config.js`, which it re-reads every few seconds
+  (loading it as a script, since a `file://` page cannot `fetch()` local
+  files). `dashboard/widgets.js` is the catalog behind the Add menu and the
+  settings forms.
 - The Edge is a real Windows display even in dashboard mode, so touches *do*
   reach Windows — that's why the focus guard exists.
 
@@ -214,11 +248,12 @@ game is closed.
 
 - `widgets/` — the HUD panels (plain HTML; also packageable as iCUE widgets) and
   the canonical `jm-api.js`
-- `dashboard/` — kiosk page, its `config.js` layout, and the configuration README
+- `dashboard/` — kiosk page with the on-screen layout editor, the `widgets.js`
+  catalog, the `config.js` starting layout, and the configuration README
 - `mod/` — the iCUE HUD Bridge Fabric mod (inventory, equipment durability,
   tracked chests → `localhost:27421`); `scripts\build-mod.ps1` builds and installs it
 - `scripts/` — installer, mod build, packager, `jm-api.js` sync, focus guard,
-  task registration, dashboard launcher
+  task registration, dashboard launcher and its control service
 - `tools/` — the mock JourneyMap server for widget development; also where
   `build-mod.ps1` keeps its downloaded JDK
 - `attic/` — retired first iteration (the 26.2 mod that `mod/` grew out of, and an
