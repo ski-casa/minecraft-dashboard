@@ -2,7 +2,8 @@
 
 Versions follow [semantic versioning](https://semver.org): the number in
 `VERSION` is the project's; the bridge mod jar and the widget packages carry
-the same number.
+the same number. `scripts\bump-version.ps1 <version>` updates every place
+and starts the entry below.
 
 ## 1.0.0 — 2026-10-15
 

@@ -184,6 +184,7 @@ acts as a normal 2560 × 720 monitor.
 | `scripts\start-dashboard.ps1` | Opens the kiosk window. `-ListMonitors`, `-Monitor n -Remember`, `-Restart`, `-Stop`. Also starts `dashboard-control.ps1`, which the page uses to list monitors, move itself and save layouts. |
 | `scripts\install-tasks.ps1` | Logon tasks for the dashboard and the focus guard. `-Uninstall` removes them. |
 | `scripts\package-widgets.ps1` | Builds `dist\*.icuewidget` files to use the widgets inside iCUE on a Xeneon Edge instead of the kiosk browser (iCUE's own slot grid then decides the layout). |
+| `scripts\bump-version.ps1 1.1.0` | Sets the version everywhere (`VERSION`, mod jar, widget manifests, dashboard, README), writes the changelog entry; `-Commit -Push` also commits, tags `v1.1.0` and pushes. `-Check` verifies all places agree. |
 
 The bridge mod adds two in-game keys, **K** (count the open chest for
 Materials) and **H** (capture your position), changeable in
