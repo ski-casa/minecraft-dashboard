@@ -37,6 +37,17 @@ if (-not $SkipBuild) {
     Write-Host "Using JDK at $jdk"
     $env:JAVA_HOME = $jdk
 
+    # OneDrive (or a stale Gradle daemon) sometimes holds buildclasses open, which makes
+    # compileJava fail to clean it. Clear it ourselves; if that fails too, move it aside.
+    $classes = Join-Path $modDir 'buildclasses'
+    if (Test-Path $classes) {
+        try { Remove-Item -Recurse -Force $classes -ErrorAction Stop }
+        catch {
+            $aside = Join-Path $modDir ("buildclasses-stale-" + (Get-Date -Format 'yyyyMMddHHmmss'))
+            try { Rename-Item $classes $aside -ErrorAction Stop; Write-Host "buildclasses was locked; moved aside to $(Split-Path $aside -Leaf) (safe to delete later)" }
+            catch { Write-Warning "buildclasses is locked and could not be moved; the build may fail. Close editors/Gradle daemons using moduild and retry." }
+        }
+    }
     Push-Location $modDir
     try {
         Write-Host "Building mod in $modDir ..."
@@ -56,15 +67,25 @@ if (-not $jar) {
 }
 
 if (-not (Test-Path $modsDir)) { New-Item -ItemType Directory -Path $modsDir | Out-Null }
-$mcRunning = Get-Process -Name javaw -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -match 'Minecraft' }
+$mcRunning = Test-MinecraftRunning
 if ($mcRunning) {
     Write-Warning "Minecraft is running; the new jar is picked up on the next launch."
 }
+# Never leave two icuehud jars behind (Fabric refuses to start with duplicate mods):
+# if an old one is locked by the running game, keep it and skip the install.
+$blocked = $false
 Get-ChildItem -Path $modsDir -Filter 'icuehud-*.jar' -ErrorAction SilentlyContinue |
     Where-Object { $_.Name -ne $jar.Name } | ForEach-Object {
-        Remove-Item $_.FullName -Force
-        Write-Host "  removed old $($_.Name)"
+        try {
+            Remove-Item $_.FullName -Force -ErrorAction Stop
+            Write-Host "  removed old $($_.Name)"
+        } catch {
+            Write-Warning "Could not replace $($_.Name) (in use by the running game). Close Minecraft and run build-mod.ps1 -SkipBuild to install $($jar.Name)."
+            $blocked = $true
+        }
     }
-Copy-Item -Path $jar.FullName -Destination (Join-Path $modsDir $jar.Name) -Force
-Write-Host "Installed $($jar.Name) -> $modsDir"
+if (-not $blocked) {
+    Copy-Item -Path $jar.FullName -Destination (Join-Path $modsDir $jar.Name) -Force
+    Write-Host "Installed $($jar.Name) -> $modsDir"
+}
 Write-Host "In a world, http://localhost:27421/state should answer."

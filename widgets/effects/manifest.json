@@ -3,7 +3,7 @@
 	"id": "com.icuehud.widgets.effects",
 	"name": "MC Effects",
 	"description": "Active potion effects with countdown bars; warns when Fire Resistance or Water Breathing is about to run out. Read from the iCUE HUD Bridge mod.",
-	"version": "0.1.0",
+	"version": "1.0.0",
 	"preview_icon": "icon.png",
 	"min_framework_version": "1.4.0",
 	"min_app_version": "5.47.0",

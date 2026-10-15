@@ -3,7 +3,7 @@
 	"id": "com.icuehud.widgets.inventory",
 	"name": "MC Inventory",
 	"description": "Your inventory as a grid with counts and free slots. Needs the iCUE HUD Bridge mod.",
-	"version": "0.1.0",
+	"version": "1.0.0",
 	"preview_icon": "icon.png",
 	"min_framework_version": "1.4.0",
 	"min_app_version": "5.47.0",
