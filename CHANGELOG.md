@@ -5,6 +5,10 @@ Versions follow [semantic versioning](https://semver.org): the number in
 the same number. `scripts\bump-version.ps1 <version>` updates every place
 and starts the entry below.
 
+## 1.0.1 — 2026-10-15
+
+- Added bump-version 1.0.0, no version changes required.
+
 ## 1.0.0 — 2026-10-15
 
 First release. The project started as a HUD for the Corsair Xeneon Edge and

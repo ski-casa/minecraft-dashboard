@@ -1,6 +1,6 @@
 # Minecraft → Secondary Monitor
 
-**Version 1.0.0** · [changelog](CHANGELOG.md)
+**Version 1.0.1** · [changelog](CHANGELOG.md)
 
 A live Minecraft dashboard for a second screen: map, coordinates, clock,
 gear, effects, waypoints and more, arranged by dragging panels around on the

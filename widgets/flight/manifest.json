@@ -3,7 +3,7 @@
 	"id": "com.icuehud.widgets.flight",
 	"name": "MC Flight",
 	"description": "Elytra durability, rockets, altitude, speed and heading. Needs the iCUE HUD Bridge mod.",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"preview_icon": "icon.png",
 	"min_framework_version": "1.4.0",
 	"min_app_version": "5.47.0",
