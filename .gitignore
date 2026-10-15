@@ -15,3 +15,6 @@ mod/run/
 
 # Layouts saved from the dashboard (personal); the samples/ folder is kept
 dashboard/layouts/*.json
+
+# Fabric installer fetched by setup.ps1
+tools/fabric-installer-*.jar

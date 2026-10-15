@@ -1,12 +1,17 @@
-# Minecraft → Xeneon Edge HUD
+# Minecraft → Secondary Monitor
 
-Live Minecraft dashboard on the Corsair Xeneon Edge touchscreen in a kiosk browser (or as iCUE widgets),
-fed by the [JourneyMap](https://modrinth.com/mod/journeymap) webmap API
-(`http://localhost:8080`) plus a small client mod of its own for inventory,
-armor and chest contents. Works with solo worlds **and Realms**, on any
-Minecraft version JourneyMap supports (Fabric here; JourneyMap also ships
-Forge/NeoForge builds if you ever switch loaders). Currently running on
-Minecraft 26.3.
+A live Minecraft dashboard for a second screen: map, coordinates, clock,
+gear, effects, waypoints and more, arranged by dragging panels around on the
+screen itself. It runs in a kiosk browser window on any monitor (touch or
+not), fed by the [JourneyMap](https://modrinth.com/mod/journeymap) webmap API
+and a small client mod of its own. Works with solo worlds **and Realms**, on
+any Minecraft version JourneyMap supports (Fabric; currently 26.3).
+
+The project started as a HUD for the Corsair Xeneon Edge, the 2560 × 720
+touchscreen, and that is still its natural home: tap-driven widgets, a focus
+guard so taps never steal the game's input, and iCUE widget packaging. Since
+then the layout became screen-independent, so the same widgets fill a 16:9
+monitor, a tablet-sized display or anything else.
 
 ![The dashboard on the Xeneon Edge: clock, live and tapped coordinates, the cave map with hostile mobs, armor durability, a materials list, waypoints and environment](docs/dashboard.png)
 
@@ -14,247 +19,238 @@ Minecraft 26.3.
 has switched to the cave layer and shows three hostiles nearby, the chestplate and
 leggings are in the red, and the build project counts six tracked chests.*
 
-## Layout
+## Widgets
 
-The dashboard is a grid of panels that you arrange **on the screen itself**:
-tap the dim ⚙ in the bottom-left corner, then drag panels around, drag their
-corners to resize, ⚙ on a panel for its settings, **＋ Add widget** for more,
-**Screen** for the grid size, the saved layouts and the monitor to show on.
-Changes are saved as you make them (per monitor) and survive restarts;
-**Done** offers to keep the arrangement under a name, saved as a file in
-`dashboard/layouts/`, and **Layout…** exports it as a `config.js` to carry to
-another machine. Details in [dashboard/README.md](dashboard/README.md).
-
-[dashboard/config.js](dashboard/config.js) is the starting layout (and what
-"Reset" goes back to). Out of the box it is a 16 × 9 grid with the map in
-the middle, three panels down the left, gear and build progress next to the
-map, and waypoints and environment on the right:
-
-```
-┌─────────┬─────────────────────────┬──────────┬─────────┐
-│  Clock  │                         │Durability│Waypoints│
-│day/night│                         │ helm     │direct-to│
-├─────────┤                         │ chest    │         │
-│ Coords  │        Live Map         │ legs …   ├─────────┤
-│ (live)  │ mobs · villagers        ├──────────┤         │
-├─────────┤ players · waypoints     │Materials │ Environ-│
-│ Coords  │ + / − zoom              │ have/need│  ment   │
-│ (tap)   │                         │ per item │         │
-└─────────┴─────────────────────────┴──────────┴─────────┘
-```
-
-- **MC Live Map** (`widgets/map`) — chrome-free map centered on you with
-  JourneyMap's radar drawn on it: hostile mobs (red ring), animals, villagers and
-  other players (skin face and name), plus your waypoints with death points marked.
-  Auto mode shows the night layer after dark and the cave layer underground (always
-  in the Nether). **+ / −** buttons zoom (optionally snapping back after a while);
-  each radar category, waypoints and labels can be switched off in the config.
-- **MC Coordinates** (`widgets/coords`) — X/Y/Z, dimension, facing; updates twice a second.
-- **MC Coordinates (tap)** (`widgets/coords-tap`) — updates **only when tapped** (or
-  when you press **H** in game, with the mod below); shows the capture time. Use it to
-  pin a spot (portal, base, drop chest) while you keep moving.
-- **MC Day/Night Clock** (`widgets/clock`) — in-game time with the sun/moon on an arc,
-  countdown to nightfall or dawn, and when the bed works.
-- **MC Waypoints** (`widgets/waypoints`) — your JourneyMap waypoints by distance, with
-  height difference and an arrow relative to where you face; death points pinned in red;
-  tap a row to keep it on top.
-- **MC Environment** (`widgets/environment`) — biome, the Nether/Overworld portal
-  coordinates for where you stand, chunk and region.
-- **MC Armor** (`widgets/armor`) — durability bars for your helmet, chestplate,
-  leggings, boots and off hand (optionally the held item too): green → yellow →
-  orange → red, a red ✕ for an empty slot. Needs the mod below.
-- **MC Materials** (`widgets/materials`) — a build's shopping list (`smooth_stone:1242, …`
-  in the config) with `have/need` per item, counting your inventory plus the chests
-  you placed. Chests you find are ignored unless you claim them with a key while
-  they are open. Needs the mod below.
-
-And, newer and smaller, each addable from the **＋ Add widget** menu:
-**Threats** (radar hostiles as a sorted list), **Effects** (potion effects with
-countdowns, warning before Fire Resistance runs out), **Death recovery** (where
-you died, how far, and the item-despawn countdown), **Light & spawn risk**,
-**Day counter**, **Inventory**, **XP & enchanting**, **Flight** (elytra),
-**Connection** (ping / FPS), **Quick actions** (buttons that press keys, send
-chat or capture coordinates in game), **Timers** and **Checklist**. The map
-also has a trail option and a fixed-center "base cam" mode. All documented in
+Add any of these from the **＋ Add widget** menu; each has its own settings
+form. The ones marked *mod* read the bridge mod (setup step 2); the rest only
+need JourneyMap. Full parameter reference:
 [dashboard/README.md](dashboard/README.md#widgets).
 
-Everything past JourneyMap's data reads the **iCUE HUD Bridge** mod in `mod/`, a
-small client-side Fabric mod that serves your inventory, equipment, effects,
-vitals, light level and tracked chest contents on `http://localhost:27421`,
-and accepts quick actions. JourneyMap has no view of any of that. Item pictures are
-the game's own sprites, or for 3D blocks (stairs, chests, shields) the Minecraft
-Wiki's inventory renders, fetched once and cached locally.
+**Map & navigation**
 
-Every panel's text size can be nudged per panel ("Text size" in its
-settings), the same widget can be added twice with different settings (a
-close-up and an overview map), and any web page can be a panel. Because
-panels live in grid cells rather than pixels, the same layout fills any
-screen; on a differently shaped monitor, pick a grid that suits it under
-**Screen** and shuffle the panels. All the options, examples and limitations
-are in [dashboard/README.md](dashboard/README.md).
+| Widget | What it shows |
+|---|---|
+| **Live map** | JourneyMap centered on you with the radar drawn on it: hostile mobs, animals, villagers, other players, your waypoints. Auto-switches to the night and cave layers. Optional trail of your path and a fixed-center "base cam" mode. |
+| **Coordinates** | X / Y / Z, dimension and facing, live. |
+| **Coordinates (tap)** | Stores your position when tapped (or with **H** in game, *mod*) so you can pin a portal or a hole and keep moving. |
+| **Waypoints** | Your JourneyMap waypoints by distance, with height difference and an arrow relative to where you face; death points pinned in red. |
+| **Threats** | The radar's hostiles as a sorted list: what, how far, which way. |
+
+**Inventory & gear**
+
+| Widget | What it shows |
+|---|---|
+| **Armor durability** *(mod)* | Bars for helmet, chestplate, leggings, boots, off hand and optionally the held tool, green → red. |
+| **Materials** *(mod)* | A build's shopping list with have/need per item, counting your inventory plus the chests you placed or claimed. |
+| **Inventory** *(mod)* | All 36 slots as a grid with counts and durability, and how many are free. |
+| **XP & enchanting** *(mod)* | Level, progress, lapis on hand, highlight at your target level. |
+| **Flight** *(mod)* | Elytra durability, rockets, altitude, speed, climb rate and heading. |
+
+**Status**
+
+| Widget | What it shows |
+|---|---|
+| **Day / night clock** | In-game time on a sun/moon arc, countdown to nightfall or dawn, when the bed works. |
+| **Environment** | Biome, the Nether/Overworld portal link for where you stand, chunk and region. |
+| **Effects** *(mod)* | Potion effects with countdown bars; warns before Fire Resistance, Water Breathing or Slow Falling run out. |
+| **Death recovery** *(mod)* | Where you last died, distance and direction, and a countdown until the dropped items despawn. |
+| **Light & spawn risk** *(mod)* | Light level where you stand, whether mobs can spawn there, weather and moon phase. |
+| **Day counter** *(mod)* | World day number, session play time, real clock. |
+| **Connection** *(mod)* | Ping to the server or Realm, and FPS. |
+
+**Tools**
+
+| Widget | What it shows |
+|---|---|
+| **Quick actions** *(mod)* | Big buttons that act in game: press a key (JourneyMap's **B** for a waypoint), send a chat line, capture coordinates, screenshot. |
+| **Timers** | Tap-to-start countdowns and a stopwatch for smelting, brewing, crops. |
+| **Checklist** | Steps to tick off; ticks are remembered. |
+
+Plus **Web page** (any URL in a panel) and **Empty panel**. The same widget can
+be added more than once with different settings, and every widget has a text
+size setting.
+
+## Arranging the screen
+
+Tap the dim **⚙** in the bottom-left corner of the dashboard:
+
+- **Drag** a panel to move it, drag its striped corner to resize. Panels snap
+  to a grid and cannot overlap.
+- **⚙** on a panel opens its settings; **✕** removes it. **＋ Add widget** adds one.
+- **Screen** sets the grid, colors and data sources, lists your saved
+  layouts, and moves the dashboard to another monitor with a tap.
+- **Done** leaves edit mode and offers to save the arrangement under a name.
+
+Changes are saved as you make them, per monitor, and survive restarts. Named
+layouts are files in `dashboard/layouts/` (two samples are included);
+[dashboard/config.js](dashboard/config.js) is the starting layout and what
+"Reset" returns to. Everything in detail: [dashboard/README.md](dashboard/README.md).
 
 ## Setup
 
-### 1. Mods (re-run after every Minecraft update)
+### What you need
+
+- **Windows 11** (10 works too) and **PowerShell**. Everything below is PowerShell
+  scripts run from the repo folder; no admin rights needed.
+- **Minecraft: Java Edition** installed through the official launcher, started
+  at least once (that creates `%APPDATA%\.minecraft`). Any version
+  [JourneyMap supports](https://modrinth.com/mod/journeymap/versions) works;
+  the newest release usually does within days of release.
+- **Internet access** during setup: the scripts download the Fabric installer,
+  a JDK, and the mods from Modrinth and Mojang. Nothing is downloaded while you play.
+- A **second monitor**, touchscreen or not. The dashboard is a browser window
+  (Edge, which Windows ships, or Chrome).
+
+You do *not* need to install Java, Fabric or any mod yourself; `setup.ps1`
+does all of it, into `tools\` inside the repo and the normal `.minecraft`
+folders, and never touches your other mods.
+
+### Quick start
 
 ```powershell
-.\scripts\install-mods.ps1
+git clone https://github.com/slaskows/minecraft-dashboard.git
+cd minecraft-dashboard
+.\scripts\setup.ps1
 ```
 
-Detects your newest Fabric profile, installs the matching **JourneyMap**,
-**JourneyMap WebMap** and a **borderless fullscreen** mod (Borderless Fullscreen,
-or Cubes Without Borders on 26.2 and older) from Modrinth, sets
-`pauseOnLostFocus:false`, and pins the webmap to port 8080 (the port pin needs
-one game launch first — run the script again after that). It also installs the
-repo's own mod if it has been built (next step).
+`setup.ps1` is idempotent: it does only what is missing and can be re-run any
+time (after a Minecraft update, after moving the repo). In order it:
 
-### 1b. The iCUE HUD Bridge mod (for the armor and materials widgets)
+1. **Picks the Minecraft version** — the newest Fabric profile you already
+   have, otherwise the latest release (`-McVersion 26.3` to choose), and
+   checks JourneyMap exists for it.
+2. **Gets a JDK 25** into `tools\` if you have none (Fabric's build tooling
+   needs it; ~200 MB, once).
+3. **Installs the Fabric loader** profile with the official Fabric installer.
+   It shows up in the Minecraft Launcher as `fabric-loader-<version>`.
+4. **Installs the mods** from Modrinth: Fabric API, JourneyMap, JourneyMap
+   WebMap, and a borderless-fullscreen mod (so a stolen focus can never
+   minimize the game). Sets `pauseOnLostFocus:false` so solo worlds keep
+   running while you tap the dashboard.
+5. **Builds and installs the bridge mod** from `mod/`, pinned to the exact
+   Minecraft / Fabric / Fabric API versions it just installed.
+6. **Opens the dashboard** on your second monitor.
 
-```powershell
-.\scripts\build-mod.ps1
-```
+Then it tells you what is left, which is always the same two things:
 
-Builds `mod/` with Gradle and copies the jar into the mods folder. Fabric's
-build tooling needs a JDK 25; if none is found the script downloads one into
-`tools\` (gitignored). The first build takes a few minutes. The mod is pinned
-to a Minecraft version: after a game update, set the new versions in
-`mod/gradle.properties` (from [fabricmc.net/develop](https://fabricmc.net/develop))
-and `mod/src/main/resources/fabric.mod.json`, then build again.
+- **Play once.** In the launcher select the `fabric-loader-…` profile, start
+  the game and join a world. JourneyMap writes its config on this first
+  launch.
+- **Run `.\scripts\setup.ps1` once more.** It now finds that config and pins
+  JourneyMap's webmap to port 8080, which every widget reads. From then on
+  nothing else is needed; the panels light up whenever you are in a world.
 
-In game the mod adds two keys: **K** while a chest is open counts (or
-un-counts) it for the materials widget, and **H** stamps your position onto
-the coords-tap panel (see [dashboard/README.md](dashboard/README.md#mod-backed-widgets)).
-Both can be changed in `.minecraft\config\icuehud\keys.properties` (created on
-first launch; edits apply while the game runs).
+Options: `-Autostart` registers the dashboard (and, for a touchscreen, the
+focus guard) as logon tasks; `-NoDashboard` skips opening it;
+`-MinecraftDir <path>` for a non-standard install.
 
-Prereq: the [Fabric loader](https://fabricmc.net/use/installer/) profile for
-your Minecraft version. Per Minecraft version this project needs that profile,
-the Modrinth mods `install-mods.ps1` fetches, and a rebuild of the bridge mod;
-the dashboard and widgets themselves are version-independent.
+In game, keep JourneyMap's radar on (**J → Options → Radar**: mobs, animals,
+villagers, players); the map and the Threats widget only see what the radar
+reports. Use the borderless toggle in Minecraft's video settings rather than
+vanilla fullscreen.
 
-### 2. Focus guard (one-time)
+### After a Minecraft update
 
-```powershell
-.\scripts\install-tasks.ps1
-```
+Run `.\scripts\setup.ps1` again. It installs Fabric for the new version,
+fetches the matching mods and rebuilds the bridge mod. If JourneyMap has no
+build for the new version yet the script says so; play the previous version
+(`-McVersion <previous>`) until it does.
 
-Registers `focus-guard.ps1` (and the dashboard launcher from step 3) as hidden at-logon tasks and starts them. When a tap
-on the Edge steals focus from Minecraft, it gives focus straight back and snaps
-the cursor to where it was — the widget still gets the tap, the game never
-minimizes or loses input. Only the ultra-wide (32:9) monitor is guarded;
-the other monitors behave normally. Remove with `-Uninstall`.
+### Touchscreen setup (Xeneon Edge and similar)
 
-The borderless fullscreen mod (installed in step 1) keeps the game
-full-screen-borderless so even a stolen focus can't minimize it. In Minecraft's
-video settings, use its borderless toggle instead of vanilla fullscreen.
+Taps on a touchscreen are real Windows input, so without help a tap would
+steal focus from the game. `setup.ps1 -Autostart` (or
+`.\scripts\install-tasks.ps1` on its own) registers `focus-guard.ps1` as a
+hidden logon task: it hands focus straight back to Minecraft and returns the
+cursor, so the widget gets the tap and the game never loses input. The guard
+currently watches the 32:9 monitor (the Edge). Remove with `-Uninstall`.
 
-### 3. Dashboard on the Edge
-
-In iCUE, turn **off "Show iCUE Widgets"** for the Xeneon Edge so it behaves as
-a normal 2560x720 monitor. Then:
-
-```powershell
-.\scripts\start-dashboard.ps1
-```
-
-opens [dashboard/index.html](dashboard/index.html) as a fullscreen kiosk browser
-window (Edge/Chrome with its own profile, pinch/swipe disabled) on the 32:9
-monitor, or on another monitor if there is no Edge (`-ListMonitors` shows
-them, `-Monitor 2 -Remember` picks one for good; the **Screen** menu on the
-dashboard does the same with a tap). It also starts a small control service
-(`scripts/dashboard-control.ps1`, `localhost:27422`) that the page uses to
-list monitors and move itself. Step 2's task installer also registers it to
-open automatically at logon (`MinecraftHUD-Dashboard`). `-Restart` reopens
-it, `-Stop` closes both.
-
-Then arrange the screen with the ⚙ in the corner (see [Layout](#layout)).
-The layout is kept in that browser profile; the starting layout and widget
-settings can also be written by hand in [dashboard/config.js](dashboard/config.js),
-see [dashboard/README.md](dashboard/README.md).
+On a Xeneon Edge, turn **off "Show iCUE Widgets"** in iCUE first so the Edge
+acts as a normal 2560 × 720 monitor.
 
 <details>
-<summary>Alternative: iCUE widgets instead of the kiosk browser</summary>
+<summary>The individual scripts, if you prefer to run steps by hand</summary>
 
-`.\scripts\package-widgets.ps1` builds `dist\*.icuewidget` files for all eight
-widgets. Import the ones you want in **iCUE → Xeneon Edge → Widgets** (+ button)
-and arrange them in iCUE's 3 × 2 slot grid (for example MC Live Map → Large in
-columns 1–2, MC Coordinates → 3a, MC Coordinates (tap) → 3b). Same widgets, same
-data — just rendered by iCUE instead of a browser; `dashboard/config.js` does
-not apply there and widget settings are set in iCUE.
+| Script | Does |
+|---|---|
+| `scripts\install-mods.ps1` | Mods from Modrinth for the newest Fabric profile (`-McVersion` to choose), `pauseOnLostFocus`, webmap port pin. Needs a Fabric profile to exist. |
+| `scripts\build-mod.ps1` | Gradle build of `mod/` (downloads the JDK if needed) and copies the jar into `mods`. After a game update set the versions in `mod/gradle.properties` and `mod/src/main/resources/fabric.mod.json` first, or let `setup.ps1` do it. |
+| `scripts\start-dashboard.ps1` | Opens the kiosk window. `-ListMonitors`, `-Monitor n -Remember`, `-Restart`, `-Stop`. Also starts `dashboard-control.ps1`, which the page uses to list monitors, move itself and save layouts. |
+| `scripts\install-tasks.ps1` | Logon tasks for the dashboard and the focus guard. `-Uninstall` removes them. |
+| `scripts\package-widgets.ps1` | Builds `dist\*.icuewidget` files to use the widgets inside iCUE on a Xeneon Edge instead of the kiosk browser (iCUE's own slot grid then decides the layout). |
+
+The bridge mod adds two in-game keys, **K** (count the open chest for
+Materials) and **H** (capture your position), changeable in
+`.minecraft\config\icuehud\keys.properties`.
 </details>
 
 ### Day-to-day
 
-Nothing. Launch Minecraft (solo or Realms), join a world, and the panels light
-up; quit and they show "Minecraft not running". The guard task idles when the
-game is closed.
+Nothing. Launch Minecraft, join a world, and the panels light up; quit and
+they show "Minecraft not running".
 
 ## How it works
 
-- JourneyMap maps client-side, so Realms works; its WebMap addon serves an
-  unauthenticated localhost REST API: `/data/player` (position/heading/biome),
-  `/data/world` (dimension, time), `/data/waypoints`, `/data/all?images.since=`
-  (changed map regions), `/tiles/tile.png` (512px region tiles). The map widget
-  bundles Leaflet (`CRS.Simple`, native zoom 0, 1 block = 1 map unit) and
-  re-fetches only regions JourneyMap re-rendered.
-- The bridge mod (`mod/`) runs inside the client and serves
-  `http://localhost:27421/state`: hotbar and inventory, the six equipment slots
-  with damage values, active effects, vitals (health, food, air, XP, speed),
-  light level, weather and world time, the last death, ping and FPS, the last
-  position captured with the hotkey, and every tracked chest with its contents
-  as of the last time it was open. `POST /action` runs a key press, chat line,
-  command, capture, screenshot or camera toggle on the game thread (loopback
-  only, so it can do nothing your own keyboard could not). Chests are
-  tracked when you place them (or claim them with the hotkey) and remembered
-  per world in `.minecraft\config\icuehud\`. `/icon?id=` serves item pictures
-  from the game files, falling back to Minecraft Wiki inventory sprites cached
-  on disk.
-- `widgets/jm-api.js` is the shared API helper. Each widget folder carries its
-  own copy because iCUE imports widgets as standalone packages; after editing
-  the canonical file run `scripts\sync-jm-api.ps1` (the packager does it too).
-- `dashboard/index.html` builds a CSS grid of iframes, one per panel, passing
-  each widget its settings as URL parameters. The layout comes from the
-  browser's localStorage (written by the on-screen editor) or, until one is
-  saved, from `dashboard/config.js`, which it re-reads every few seconds
-  (loading it as a script, since a `file://` page cannot `fetch()` local
-  files). `dashboard/widgets.js` is the catalog behind the Add menu and the
-  settings forms.
-- The Edge is a real Windows display even in dashboard mode, so touches *do*
-  reach Windows — that's why the focus guard exists.
+- **JourneyMap** maps client-side (so Realms work) and its WebMap addon serves
+  a localhost REST API: player position and heading, world time, waypoints,
+  the radar lists and map tiles. The map widget bundles Leaflet and re-fetches
+  only regions JourneyMap re-rendered.
+- **The bridge mod** (`mod/`, the "iCUE HUD Bridge") runs inside the client
+  and serves `http://localhost:27421/state`: inventory, equipment with
+  durability, effects, vitals, light level, weather, world time, the last
+  death, ping and FPS, the captured position, and every tracked chest with
+  its contents as of the last time it was open. `POST /action` runs a key
+  press, chat line, command, capture or screenshot on the game thread; it is
+  loopback-only and can do nothing your own keyboard could not. `/icon?id=`
+  serves item pictures from the game files, with Minecraft Wiki sprites for
+  3D blocks cached on disk.
+- **The dashboard** (`dashboard/index.html`) is one page that builds a CSS
+  grid of iframes, one per widget, passing settings as URL parameters. The
+  layout lives in the browser's storage (written by the editor) or, until one
+  is saved, in `config.js`. `dashboard/widgets.js` is the catalog behind the
+  Add menu and the settings forms; `scripts/dashboard-control.ps1` does what
+  a page cannot: list monitors, reopen the window elsewhere, write layout files.
+- **Widgets** are plain HTML in `widgets/<name>/`, sized in `vmin` so they
+  scale to any panel. `widgets/jm-api.js` is the shared API helper; each
+  folder carries a copy (iCUE imports widgets standalone), synced with
+  `scripts\sync-jm-api.ps1`.
 
 ## Troubleshooting
 
-- **Widgets say "Minecraft not running" in-game** — check
-  `http://localhost:8080/data/player` in a browser. If the port differs
-  (JourneyMap picks a free one if 8080 is busy), either re-run
-  `install-mods.ps1` after a launch to pin it, or set `apiBase` in
-  `dashboard/config.js`.
-- **Map is black in a new area** — JourneyMap only maps where you've been;
-  give it a few seconds after entering a world.
-- **Red banner on the dashboard** — a problem in `dashboard/config.js`; it
-  says which panel and what. See [dashboard/README.md](dashboard/README.md).
-- **Tap minimizes the game anyway** — is the focus guard task running?
+- **"Minecraft not running" in game** — open `http://localhost:8080/data/player`
+  in a browser. If the port differs (JourneyMap picks a free one when 8080 is
+  busy), re-run `setup.ps1` after a launch, or set the JourneyMap address
+  under **Screen → Data sources**.
+- **"Could not remove … is Minecraft running?"** during setup — the game holds
+  its mod jars open; the old version was kept. Close the game and run
+  `setup.ps1` again.
+- **"HUD mod not running"** — the mod jar does not match the game version (the
+  game says so at launch) or was never built: `scripts\setup.ps1`, then
+  check `http://localhost:27421/state` in a world. **"Mod update needed"**
+  means the widget is newer than the installed mod: rebuild.
+- **Map is black in a new area** — JourneyMap only maps where you have been.
+- **Red banner on the dashboard** — a problem in `config.js`; it names the
+  panel and the problem.
+- **A tap minimizes the game** (touchscreen) — is the focus guard running?
   `Get-ScheduledTask MinecraftHUD-FocusGuard` should say Running; re-run
-  `scripts\install-tasks.ps1`. Also make sure the game uses Borderless
-  Fullscreen, not vanilla fullscreen.
-- **New Minecraft version, no JourneyMap build yet** — the installer says so
-  explicitly. Play the older version until JourneyMap updates (usually days).
-- **Armor / materials panels say "HUD mod not running"** — the mod jar in the
-  mods folder does not match the game version (the game refuses it at launch
-  and says so), or it was never built. `scripts\build-mod.ps1`, then check
-  `http://localhost:27421/state` in a world.
+  `scripts\install-tasks.ps1`, and use Borderless Fullscreen in the game.
+- **Layout gone after a restart** — the kiosk profile must not be private;
+  the launcher handles this, so start the dashboard with it. Saved layouts
+  under **Screen** are the safe copy.
+- **New Minecraft version, no JourneyMap build yet** — the installer says so.
+  Play the older version until JourneyMap updates.
 
 ## Repo layout
 
-- `widgets/` — the HUD panels (plain HTML; also packageable as iCUE widgets) and
-  the canonical `jm-api.js`
-- `dashboard/` — kiosk page with the on-screen layout editor, the `widgets.js`
-  catalog, the `config.js` starting layout, and the configuration README
-- `mod/` — the iCUE HUD Bridge Fabric mod (inventory, equipment durability,
-  tracked chests → `localhost:27421`); `scripts\build-mod.ps1` builds and installs it
-- `scripts/` — installer, mod build, packager, `jm-api.js` sync, focus guard,
-  task registration, dashboard launcher and its control service
-- `tools/` — the mock JourneyMap server for widget development; also where
-  `build-mod.ps1` keeps its downloaded JDK
-- `attic/` — retired first iteration (the 26.2 mod that `mod/` grew out of, and an
-  inventory widget). Kept for reference only; safe to delete.
+- `dashboard/` — the kiosk page with the layout editor, `widgets.js` (widget
+  catalog), `config.js` (starting layout), `layouts/samples/`, and the
+  configuration README
+- `widgets/` — one folder per widget (plain HTML; also packageable for iCUE)
+  and the canonical `jm-api.js`
+- `mod/` — the bridge Fabric mod; `scripts\build-mod.ps1` builds and installs it
+- `scripts/` — `setup.ps1` and the steps it runs (Fabric + mod installer, mod
+  build, dashboard launcher and control service, focus guard, task
+  registration), widget packager, `jm-api.js` sync
+- `tools/` — mock JourneyMap and mod servers for developing widgets without
+  the game; also where `build-mod.ps1` keeps its JDK
+- `attic/` — the retired first iteration, kept for reference; safe to delete

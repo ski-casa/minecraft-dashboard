@@ -29,38 +29,11 @@ $root = Split-Path $PSScriptRoot -Parent
 $modDir = Join-Path $root 'mod'
 $toolsDir = Join-Path $root 'tools'
 $modsDir = Join-Path $MinecraftDir 'mods'
-$RequiredJava = 25
 
-function Get-JavaMajor([string]$JavaExe) {
-    try {
-        $line = (& $JavaExe -version 2>&1 | Select-Object -First 1) -join ''
-        if ($line -match '"(\d+)') { return [int]$Matches[1] }
-    } catch {}
-    return 0
-}
-
-function Find-Jdk {
-    if ($env:JAVA_HOME -and (Test-Path "$env:JAVA_HOME\bin\java.exe") -and (Get-JavaMajor "$env:JAVA_HOME\bin\java.exe") -ge $RequiredJava) {
-        return $env:JAVA_HOME
-    }
-    $bundled = Get-ChildItem -Path $toolsDir -Directory -Filter "jdk-$RequiredJava*" -ErrorAction SilentlyContinue |
-        Sort-Object Name -Descending | Select-Object -First 1
-    if ($bundled -and (Test-Path "$($bundled.FullName)\bin\java.exe")) { return $bundled.FullName }
-    return $null
-}
+. (Join-Path $PSScriptRoot 'common.ps1')
 
 if (-not $SkipBuild) {
-    $jdk = Find-Jdk
-    if (-not $jdk) {
-        Write-Host "No JDK $RequiredJava found; downloading Temurin JDK $RequiredJava into $toolsDir ..."
-        New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
-        $zip = Join-Path $env:TEMP "temurin-jdk$RequiredJava.zip"
-        Invoke-WebRequest -Uri "https://api.adoptium.net/v3/binary/latest/$RequiredJava/ga/windows/x64/jdk/hotspot/normal/eclipse" -OutFile $zip
-        Expand-Archive -Path $zip -DestinationPath $toolsDir -Force
-        Remove-Item $zip -Force
-        $jdk = Find-Jdk
-        if (-not $jdk) { throw "JDK download did not produce tools\jdk-$RequiredJava*. Install a JDK $RequiredJava and set JAVA_HOME." }
-    }
+    $jdk = Get-OrInstallJdk $toolsDir
     Write-Host "Using JDK at $jdk"
     $env:JAVA_HOME = $jdk
 

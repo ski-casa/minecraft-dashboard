@@ -31,6 +31,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+. (Join-Path $PSScriptRoot 'common.ps1')
 
 $ModsDir = Join-Path $MinecraftDir 'mods'
 $StateFile = Join-Path $ModsDir 'icuehud-mods.json'
@@ -41,19 +42,11 @@ if (-not (Test-Path $MinecraftDir)) {
 
 # --- 1. Resolve the Minecraft version from the installed Fabric profiles -----
 if (-not $McVersion) {
-    $fabricProfiles = Get-ChildItem -Path (Join-Path $MinecraftDir 'versions') -Directory -Filter 'fabric-loader-*' -ErrorAction SilentlyContinue
-    if (-not $fabricProfiles) {
-        throw "No Fabric profile found in $MinecraftDir\versions. Install Fabric from https://fabricmc.net/use/installer/ first, or pass -McVersion."
+    $McVersion = Get-InstalledFabricGameVersion $MinecraftDir
+    if (-not $McVersion) {
+        throw "No Fabric profile found in $MinecraftDir\versions. Run scripts\setup.ps1 (installs Fabric), or pass -McVersion."
     }
-    # Folder name format: fabric-loader-<loaderVersion>-<gameVersion>.
-    # Pick the most recently touched profile (= the one the launcher last used/installed).
-    $newest = $fabricProfiles | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    $parts = $newest.Name -split '-'
-    if ($parts.Count -lt 4) {
-        throw "Could not parse Fabric profile name '$($newest.Name)'. Pass -McVersion explicitly."
-    }
-    $McVersion = ($parts[3..($parts.Count - 1)] -join '-')
-    Write-Host "Detected Fabric profile: $($newest.Name)  ->  Minecraft $McVersion"
+    Write-Host "Detected Fabric profile for Minecraft $McVersion"
 } else {
     Write-Host "Using Minecraft version: $McVersion"
 }
@@ -63,14 +56,14 @@ if (-not (Test-Path $ModsDir)) {
 }
 
 # --- 2. Warn if the game looks like it's running -----------------------------
-$mcRunning = Get-Process -Name javaw, java -ErrorAction SilentlyContinue |
-    Where-Object { $_.MainWindowTitle -match 'Minecraft' }
-if ($mcRunning) {
-    Write-Warning "Minecraft appears to be running. Close it and re-run this script so mod/option changes take effect cleanly."
+$gameRunning = Test-MinecraftRunning
+if ($gameRunning) {
+    Write-Warning "Minecraft is running: it holds its mod jars open, so mods already installed are kept at their current version (new ones are still added). Close the game and re-run to update them."
 }
 
 # --- 3. Resolve + download mods from Modrinth --------------------------------
 $projects = @(
+    @{ Slugs = @('fabric-api');         Required = $true;  Label = 'Fabric API (needed by JourneyMap and the bridge mod)' },
     @{ Slugs = @('journeymap');         Required = $true;  Label = 'JourneyMap' },
     @{ Slugs = @('journeymap-web-map'); Required = $false; Label = 'JourneyMap WebMap addon' }
 )
@@ -90,22 +83,18 @@ if (Test-Path $StateFile) {
     }
 }
 
-function Get-ModrinthVersion([string]$Slug, [string]$GameVersion) {
-    $gv = [uri]::EscapeDataString("[""$GameVersion""]")
-    $ld = [uri]::EscapeDataString('["fabric"]')
-    $url = "https://api.modrinth.com/v2/project/$Slug/version?game_versions=$gv&loaders=$ld"
+# Deletes a jar; false when it is locked (the game is running), so the caller
+# keeps the old version rather than installing a second copy next to it.
+function Remove-Jar([string]$Path, [string]$Why) {
     try {
-        $versions = Invoke-RestMethod -Uri $url -Headers @{ 'User-Agent' = 'steve/minecraft-icue-hud (installer script)' }
+        Remove-Item $Path -Force -ErrorAction Stop
+        Write-Host "  removed $Why $(Split-Path $Path -Leaf)"
+        return $true
     } catch {
-        return $null
+        if ($gameRunning) { Write-Host "  kept $(Split-Path $Path -Leaf) (in use by the running game)" }
+        else { Write-Warning "Could not remove $(Split-Path $Path -Leaf): $($_.Exception.Message). Keeping it." }
+        return $false
     }
-    if (-not $versions) { return $null }
-    # API returns newest-first; prefer stable releases over betas/alphas.
-    foreach ($type in 'release', 'beta', 'alpha') {
-        $match = $versions | Where-Object { $_.version_type -eq $type } | Select-Object -First 1
-        if ($match) { return $match }
-    }
-    return $versions | Select-Object -First 1
 }
 
 $newState = @{}
@@ -127,25 +116,30 @@ foreach ($project in $projects) {
     if (-not $file) { $file = $version.files | Select-Object -First 1 }
 
     # Remove what we installed before (or obvious strays on first run) so jars never double up.
+    $blocked = $false
     if ($previousState.ContainsKey($slug)) {
         $old = Join-Path $ModsDir $previousState[$slug]
         if ((Test-Path $old) -and ($previousState[$slug] -ne $file.filename)) {
-            Remove-Item $old -Force
-            Write-Host "  removed old $($previousState[$slug])"
+            if (-not (Remove-Jar $old 'old')) { $blocked = $true }
         }
     } else {
-        Get-ChildItem -Path $ModsDir -Filter "$($slug -replace 'journeymap-web-map','journeymap-webmap')*.jar" -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -ne $file.filename } | ForEach-Object {
-                Remove-Item $_.FullName -Force
-                Write-Host "  removed stray $($_.Name)"
-            }
-        if ($slug -eq 'journeymap') {
-            Get-ChildItem -Path $ModsDir -Filter 'journeymap-*.jar' -ErrorAction SilentlyContinue |
-                Where-Object { $_.Name -notmatch 'webmap' -and $_.Name -ne $file.filename } | ForEach-Object {
-                    Remove-Item $_.FullName -Force
-                    Write-Host "  removed stray $($_.Name)"
-                }
+        $pattern = switch ($slug) {
+            'journeymap-web-map' { 'journeymap-webmap*.jar' }
+            'journeymap'         { 'journeymap-*.jar' }
+            'fabric-api'         { 'fabric-api-*.jar' }
+            default              { "$slug*.jar" }
         }
+        Get-ChildItem -Path $ModsDir -Filter $pattern -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ne $file.filename -and -not ($slug -eq 'journeymap' -and $_.Name -match 'webmap') } | ForEach-Object {
+                if (-not (Remove-Jar $_.FullName 'stray')) { $blocked = $true }
+            }
+    }
+    if ($blocked) {
+        $kept = if ($previousState.ContainsKey($slug)) { $previousState[$slug] } else {
+            (Get-ChildItem -Path $ModsDir -Filter $pattern | Where-Object { -not ($slug -eq 'journeymap' -and $_.Name -match 'webmap') } | Select-Object -First 1).Name
+        }
+        if ($kept) { $newState[$slug] = $kept }
+        continue
     }
 
     $dest = Join-Path $ModsDir $file.filename
@@ -153,10 +147,11 @@ foreach ($project in $projects) {
         Write-Host "  up to date: $($file.filename)"
     } else {
         Write-Host "  downloading $($file.filename) ($($version.version_number))..."
-        Invoke-WebRequest -Uri $file.url -OutFile $dest -Headers @{ 'User-Agent' = 'steve/minecraft-icue-hud (installer script)' }
+        Invoke-WebRequest -Uri $file.url -OutFile $dest -Headers @{ 'User-Agent' = $script:UserAgent }
         Write-Host "  installed:  $($file.filename)"
     }
     $newState[$slug] = $file.filename
+    $newState["$slug.version"] = $version.version_number   # setup.ps1 pins the mod build to fabric-api's
 }
 
 if ($failures) {
@@ -210,7 +205,7 @@ if ($builtJar) {
     Write-Host ""
     & (Join-Path $PSScriptRoot 'build-mod.ps1') -SkipBuild -MinecraftDir $MinecraftDir
 } else {
-    Write-Host "`niCUE HUD Bridge mod not built yet; run scripts\build-mod.ps1 for the armor and materials widgets."
+    Write-Host "`nBridge mod not built yet; run scripts\build-mod.ps1 (or scripts\setup.ps1) for the mod-backed widgets."
 }
 
 Write-Host "`nDone. Launch Minecraft with the Fabric profile and check http://localhost:$WebmapPort/data/player once you're in a world."
