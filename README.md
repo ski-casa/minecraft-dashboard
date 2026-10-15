@@ -93,17 +93,21 @@ layouts are files in `dashboard/layouts/` (two samples are included);
 - **Windows 11** (10 works too) and **PowerShell**. Everything below is PowerShell
   scripts run from the repo folder; no admin rights needed.
 - **Minecraft: Java Edition** installed through the official launcher, started
-  at least once (that creates `%APPDATA%\.minecraft`). Any version
-  [JourneyMap supports](https://modrinth.com/mod/journeymap/versions) works;
-  the newest release usually does within days of release.
+  at least once (that creates `%APPDATA%\.minecraft`). Any game version that
+  JourneyMap has a build for works
+  ([its version list](https://modrinth.com/mod/journeymap/versions)); the
+  newest release usually qualifies within days.
+- **Fabric is required** — every widget reads JourneyMap, which is a mod — but
+  `setup.ps1` installs it as an extra profile in the official launcher; your
+  vanilla profile and worlds stay as they are. Forge/NeoForge are not supported.
 - **Internet access** during setup: the scripts download the Fabric installer,
   a JDK, and the mods from Modrinth and Mojang. Nothing is downloaded while you play.
 - A **second monitor**, touchscreen or not. The dashboard is a browser window
   (Edge, which Windows ships, or Chrome).
 
-You do *not* need to install Java, Fabric or any mod yourself; `setup.ps1`
-does all of it, into `tools\` inside the repo and the normal `.minecraft`
-folders, and never touches your other mods.
+You do *not* need to install Java, Fabric, JourneyMap or any other mod
+yourself; `setup.ps1` does all of it, into `tools\` inside the repo and the
+normal `.minecraft` folders, and never touches mods it did not install.
 
 ### Quick start
 
